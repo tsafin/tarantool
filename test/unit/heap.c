@@ -10,7 +10,6 @@
 
 #define HEAP_NAME _test
 #define HEAP_LESS(h, a, b) test_type_less(h, a, b)
-#define HEAP_CMP_ARG_TYPE int
 
 struct heap_test_core;
 struct heap_test_node;
@@ -60,6 +59,7 @@ test_create()
 	value.c = 0;
 
 	struct heap_test_node *test_node = &value.node;
+	heap_test_init_node(test_node);
 	if (test_node->parent != NULL) {
 		fail("parent is not null", "test_node->parent != NULL");
  	}
@@ -82,7 +82,7 @@ test_insert_1_to_3()
 	header();
 	struct test_type *value, *root_value;
 	struct heap_test_core heap;
-	heap_test_init(&heap, 0);
+	heap_test_init(&heap);
 
 	for (uint32_t i = 0; i < 4; ++i) {
 		value = (struct test_type *)malloc(sizeof(struct test_type));
@@ -112,7 +112,7 @@ test_insert_3_to_1()
 	header();
 	struct test_type *value, *root_value;
 	struct heap_test_core heap;
-	heap_test_init(&heap, 0);
+	heap_test_init(&heap);
 
 	for (uint32_t i = 3; i > 0; --i) {
 		value = (struct test_type *)malloc(sizeof(struct test_type));
@@ -142,7 +142,7 @@ test_insert_50_to_150_mod_100()
 	header();
 	struct test_type *value, *root_value;
 	struct heap_test_core heap;
-	heap_test_init(&heap, 0);
+	heap_test_init(&heap);
 
 	for (uint32_t i = 50; i < 150; ++i) {
 		value = (struct test_type *)malloc(sizeof(struct test_type));
@@ -186,7 +186,7 @@ test_insert_1000_random()
 	uint32_t ans = UINT_MAX;
 	struct test_type *value, *root_value;
 	struct heap_test_core heap;
-	heap_test_init(&heap, 0);
+	heap_test_init(&heap);
 
 	for (uint32_t i = 0; i < TEST_CASE_SIZE; ++i) {
 		value = (struct test_type *)malloc(sizeof(struct test_type));
@@ -220,7 +220,7 @@ test_insert_10_to_1_pop()
 	header();
 	struct test_type *value, *root_value;
 	struct heap_test_core heap;
-	heap_test_init(&heap, 0);
+	heap_test_init(&heap);
 
 	for (uint32_t i = 10; i > 0; --i) {
 		value = (struct test_type *)malloc(sizeof(struct test_type));
@@ -279,7 +279,7 @@ test_insert_10000_pop_10000_random() {
 
 	struct test_type *value, *root_value;
 	struct heap_test_core heap;
-	heap_test_init(&heap, 0);
+	heap_test_init(&heap);
 
 	uint32_t keys_it = 0;
 	uint32_t *keys = (uint32_t *)malloc(sizeof(uint32_t) * TEST_CASE_SIZE);
@@ -351,7 +351,7 @@ test_insert_with_null() {
 
 	struct test_type *value;
 	struct heap_test_core heap;
-	heap_test_init(&heap, 0);
+	heap_test_init(&heap);
 
 	value = (struct test_type *)malloc(sizeof(struct test_type));
 
@@ -377,7 +377,7 @@ test_insert_pop_workload() {
 
 	struct test_type *value, *root_value;
 	struct heap_test_core heap;
-	heap_test_init(&heap, 0);
+	heap_test_init(&heap);
 
 	uint32_t current_size = 0;
 
@@ -420,7 +420,7 @@ test_pop_last() {
 
 	struct test_type *value, *root_value;
 	struct heap_test_core heap;
-	heap_test_init(&heap, 0);
+	heap_test_init(&heap);
 
 	value = (struct test_type *)malloc(sizeof(struct test_type));
 	heap_test_insert(&heap, &value->node);
@@ -444,7 +444,7 @@ test_insert_update_workload() {
 
 	struct test_type *value, *root_value;
 	struct heap_test_core heap;
-	heap_test_init(&heap, 0);
+	heap_test_init(&heap);
 
 	struct test_type **nodes = (struct test_type **)
 		malloc(sizeof(struct test_type *) * TEST_CASE_SIZE);
