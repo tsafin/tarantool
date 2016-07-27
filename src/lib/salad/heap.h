@@ -55,14 +55,6 @@
 #endif
 
 /**
- * Type of optional third parameter of comparing function.
- * If not needed, simply use #define HEAP_CMP_ARG_TYPE int
- */
-#ifndef HEAP_CMP_ARG_TYPE
-#error "HEAP_CMP_ARG_TYPE must be defined"
-#endif
-
-/**
  * Data comparing function. Takes 3 parameters - heap, node1, node2,
  * where heap is pointer onto core structure and node1, node2
  * are two pointers on nodes in your structure.
@@ -114,7 +106,6 @@
  */
 struct HEAP(core) {
  struct HEAP(node) *root; /* pointer onto root of the heap */
- HEAP_CMP_ARG_TYPE arg;
 };
 
 /**
@@ -143,8 +134,7 @@ struct HEAP(iterator) {
  * Init heap.
  */
  inline static void
- HEAP(init)(struct HEAP(core) *heap,
- 	HEAP_CMP_ARG_TYPE arg);
+ HEAP(init)(struct HEAP(core) *heap);
 
 /**
  * Returns size of according to root.
@@ -308,10 +298,8 @@ HEAP(init_node)(struct HEAP(node) *node) {
  * Init heap.
  */
  inline static void
- HEAP(init)(struct HEAP(core) *heap,
-		HEAP_CMP_ARG_TYPE arg) {
+ HEAP(init)(struct HEAP(core) *heap) {
 	heap->root = NULL;
- 	heap->arg = arg;
  }
 
 /**
@@ -614,17 +602,19 @@ HEAP(dec_size)(struct HEAP(node) *node) {
 static void
 HEAP(insert)(struct HEAP(core) *heap, struct HEAP(node) *node) {
 	assert(heap);
-	struct HEAP(node) *root = heap->root;
+
 	if (node == NULL) {
 		return;
 	}
+
 	HEAP(init_node)(node);
-	if (root == NULL) {
+	if (heap->root == NULL) {
 		/* save new root */
 		heap->root = node;
+		return;
 	}
 
-	struct HEAP(node) *first_not_full = HEAP(get_first_not_full)(root);
+	struct HEAP(node) *first_not_full = HEAP(get_first_not_full)(heap->root);
 	node->parent = first_not_full;
 	if (first_not_full->left) {
 		first_not_full->right = node;
@@ -665,6 +655,7 @@ HEAP(delete)(struct HEAP(core) *heap, struct HEAP(node) *value_node) {
 		assert(last_node == value_node);
 		/* save new root */
 		heap->root = NULL;
+		return;
 	}
 
 	assert(last_node->left == NULL);

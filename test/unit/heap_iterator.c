@@ -9,7 +9,6 @@
 
 #define HEAP_NAME _test
 #define HEAP_LESS(h, a, b) test_type_less(h, a, b)
-#define HEAP_CMP_ARG_TYPE int
 
 struct heap_test_core;
 struct heap_test_node;
@@ -53,7 +52,7 @@ test_iterator_create() {
 	header();
 	struct test_type *value, *root_value;
 	struct heap_test_core heap;
-	heap_test_init(&heap, 0);
+	heap_test_init(&heap);
 
 	value = (struct test_type *)malloc(sizeof(struct test_type));
 	value->val1 = 0;
@@ -83,7 +82,7 @@ test_iterator_small() {
 	struct test_type *value, *root_value;
 	struct heap_test_node *test_node;
 	struct heap_test_core heap;
-	heap_test_init(&heap, 0);
+	heap_test_init(&heap);
 
 	for (uint32_t i = 4; i > 0; --i) {
 		value = (struct test_type *)malloc(sizeof(struct test_type));
@@ -143,7 +142,7 @@ test_iterator_large() {
 	struct test_type *value, *root_value;
 	struct heap_test_node *test_node;
 	struct heap_test_core heap;
-	heap_test_init(&heap, 0);
+	heap_test_init(&heap);
 
 	for (uint32_t i = TEST_CASE_SIZE; i > 0; --i) {
 		value = (struct test_type *)malloc(sizeof(struct test_type));
