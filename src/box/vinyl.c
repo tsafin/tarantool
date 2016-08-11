@@ -606,7 +606,7 @@ struct vy_quota {
 	bool enable;
 	int wait;
 	int64_t limit;
-	int64_t used;
+	volatile int64_t used;
 	pthread_mutex_t lock;
 	pthread_cond_t cond;
 };
@@ -620,7 +620,7 @@ vy_quota_delete(struct vy_quota*);
 static void
 vy_quota_enable(struct vy_quota*);
 
-static int
+static void
 vy_quota_op(struct vy_quota*, enum vy_quotaop, int64_t);
 
 static inline uint64_t
@@ -1140,37 +1140,47 @@ vy_quota_enable(struct vy_quota *q)
 	q->enable = true;
 }
 
-static int
+static void
 vy_quota_op(struct vy_quota *q, enum vy_quotaop op, int64_t v)
 {
 	if (likely(v == 0))
-		return 0;
-	tt_pthread_mutex_lock(&q->lock);
+		return;
 	switch (op) {
 	case VINYL_QADD:
-		if (unlikely(!q->enable || q->limit == 0)) {
-			/*
-			 * Fall through to quota accounting, skip
-			 * the wait.
-			 */
-		} else {
+		/*
+		 * Optimization: dirty read q->used to check the limit
+		 * for the first time. If quota seems to be exhausted then
+		 * lock mutex and check the limit more precisely again.
+		 * Please note that atomic_load_explicit(relaxed) guarantees
+		 * only atomicity of the operation without any obligation to
+		 * synchronization and memory ordering constraints.
+		 */
+		if (q->enable && q->limit > 0 && pm_atomic_load_explicit(
+		    &q->used, pm_memory_order_relaxed) + v >= q->limit) {
+			/* Quota is probably exhausted, check more precisely */
+			tt_pthread_mutex_lock(&q->lock);
 			while (q->used + v >= q->limit) {
 				q->wait++;
 				tt_pthread_cond_wait(&q->cond, &q->lock);
 				q->wait--;
 			}
+			tt_pthread_mutex_unlock(&q->lock);
 		}
-		q->used += v;
-		break;
+		/* Atomically update q->used without synchronization */
+		pm_atomic_fetch_add_explicit(&q->used, v,
+					     pm_memory_order_relaxed);
+		return;
 	case VINYL_QREMOVE:
-		q->used -= v;
-		if (q->wait) {
-			tt_pthread_cond_signal(&q->cond);
-		}
-		break;
+		/* Atomically update q->used without synchronization */
+		pm_atomic_fetch_sub_explicit(&q->used, v,
+					     pm_memory_order_relaxed);
+		if (!q->wait) /* Optimization: dirty read here */
+			return;
+		tt_pthread_mutex_lock(&q->lock);
+		tt_pthread_cond_signal(&q->cond);
+		tt_pthread_mutex_unlock(&q->lock);
+		return;
 	}
-	tt_pthread_mutex_unlock(&q->lock);
-	return 0;
 }
 
 static int
@@ -8386,11 +8396,11 @@ vy_tuple_alloc(struct vy_index *index, uint32_t size)
 	v->flags     = 0;
 	v->refs      = 1;
 	/* update runtime statistics */
-	struct vy_env *env = index->env;
-	tt_pthread_mutex_lock(&env->stat->lock);
-	env->stat->v_count++;
-	env->stat->v_allocated += sizeof(struct vy_tuple) + size;
-	tt_pthread_mutex_unlock(&env->stat->lock);
+	struct vy_stat *stat = index->env->stat;
+	pm_atomic_fetch_add_explicit(&stat->v_count, 1,
+				     pm_memory_order_relaxed);
+	pm_atomic_fetch_add_explicit(&stat->v_allocated, vy_tuple_size(v),
+				     pm_memory_order_relaxed);
 	return v;
 }
 
@@ -8557,14 +8567,12 @@ vy_tuple_unref_rt(struct vy_stat *stat, struct vy_tuple *v)
 		pm_memory_order_relaxed);
 	assert(old_refs > 0);
 	if (likely(old_refs == 1)) {
-		uint32_t size = vy_tuple_size(v);
+		uint32_t alloc_size = vy_tuple_size(v);
 		/* update runtime statistics */
-		tt_pthread_mutex_lock(&stat->lock);
-		assert(stat->v_count > 0);
-		assert(stat->v_allocated >= size);
-		stat->v_count--;
-		stat->v_allocated -= size;
-		tt_pthread_mutex_unlock(&stat->lock);
+		pm_atomic_fetch_sub_explicit(&stat->v_count, 1,
+					     pm_memory_order_relaxed);
+		pm_atomic_fetch_sub_explicit(&stat->v_allocated, alloc_size,
+					     pm_memory_order_relaxed);
 #ifndef NDEBUG
 		memset(v, '#', vy_tuple_size(v)); /* fail early */
 #endif
