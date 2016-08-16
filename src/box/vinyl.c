@@ -5213,7 +5213,6 @@ vy_upsert_iterator_open(struct vy_iter *itr, struct sv *value)
 	itr->vif = &vif;
 	*((struct sv **)itr->priv) = value;
 }
-
 static inline int
 si_range(struct siread *q)
 {
@@ -7705,6 +7704,21 @@ vy_tuple_key_part(const char *tuple_data, uint32_t part_id)
 }
 
 /**
+ * Determine if the key has no missing parts,
+ *  i.e. it is not a key of range select
+ */
+static bool
+vy_tuple_key_is_full(const char *tuple_data, const struct key_def *key_def)
+{
+	uint32_t *offsets = (uint32_t *) tuple_data;
+	for (uint32_t part_id = 0; part_id < key_def->part_count; part_id++) {
+		if (offsets[part_id] == VY_TUPLE_KEY_MISSING)
+			return false;
+	}
+	return true;
+}
+
+/**
  * Compare two tuples
  */
 static inline int
@@ -9127,7 +9141,7 @@ struct vy_mem_iterator {
  */
 static void
 vy_mem_iterator_open(struct vy_mem_iterator *itr, struct vy_mem *mem,
-			     enum vy_order order, char *key, int64_t vlsn);
+		     enum vy_order order, char *key, int64_t vlsn);
 
 /**
  * Get a tuple from a record, that iterator currently positioned on
@@ -9144,6 +9158,13 @@ vy_mem_iterator_get(struct vy_mem_iterator *itr, struct vy_tuple **result);
  */
 static int
 vy_mem_iterator_next_key(struct vy_mem_iterator *itr);
+
+/**
+ * Restore current position (if necessary) after the given tuple
+ */
+static int
+vy_mem_iterator_restore(struct vy_mem_iterator *itr,
+			struct vy_tuple *last_tuple);
 
 /**
  * Find next (lower, older) record with the same key as current
@@ -9296,6 +9317,7 @@ static void
 vy_mem_iterator_check_version(struct vy_mem_iterator *itr)
 {
 	assert(itr->curr_tuple != NULL);
+	assert(!itr->search_ended);
 	if (itr->version == itr->mem->version)
 		return;
 	itr->version = itr->mem->version;
@@ -9421,6 +9443,99 @@ vy_mem_iterator_next_lsn(struct vy_mem_iterator *itr)
 }
 
 /**
+ * Restore current position (if necessary) after the given tuple
+ * Return 0 if nothing changed
+ * Return 1 if iterator changed position
+ */
+static int
+vy_mem_iterator_restore(struct vy_mem_iterator *itr,
+			struct vy_tuple *last_tuple)
+{
+	if (!itr->search_started || itr->version == itr->mem->version) {
+		assert(itr->search_started || last_tuple == NULL);
+		return 0;
+	}
+	if (last_tuple == NULL || itr->search_ended) {
+		itr->version = itr->mem->version;
+		struct vy_tuple *was_tuple =
+			itr->search_ended ? NULL : itr->curr_tuple;
+		itr->search_started = false;
+		itr->search_ended = false;
+		itr->curr_tuple = NULL;
+		int rc = vy_mem_iterator_start(itr);
+		struct vy_tuple *new_tuple = rc ? NULL : itr->curr_tuple;
+		return was_tuple != new_tuple;
+	}
+
+	vy_mem_iterator_check_version(itr);
+	struct bps_tree_mem_iterator pos = itr->curr_pos;
+	int rc = 0;
+	if (itr->order == VINYL_GE || itr->order == VINYL_GT || itr->order == VINYL_EQ) {
+		while (true) {
+			bps_tree_mem_itr_prev(&itr->mem->tree, &pos);
+			if (bps_tree_mem_itr_is_invalid(&pos))
+				return rc;
+			struct vy_tuple *t =
+				bps_tree_mem_itr_get_elem(&itr->mem->tree, &pos)->v;
+			int cmp = vy_tuple_compare(t->data, last_tuple->data, itr->mem->key_def);
+			if (cmp < 0 || (cmp == 0 && t->lsn >= last_tuple->lsn))
+				return rc;
+			if (t->lsn <= itr->vlsn) {
+				itr->curr_pos = pos;
+				itr->curr_tuple = t;
+				rc = 1;
+			}
+		}
+	}
+	assert(itr->order == VINYL_LE || itr->order == VINYL_LT);
+	int cmp = vy_tuple_compare(itr->curr_tuple->data, last_tuple->data, itr->mem->key_def);
+	int64_t break_lsn = cmp == 0 ? last_tuple->lsn : itr->vlsn + 1;
+	while (true) {
+		bps_tree_mem_itr_prev(&itr->mem->tree, &pos);
+		if (bps_tree_mem_itr_is_invalid(&pos))
+			return rc;
+		struct vy_tuple *t =
+			bps_tree_mem_itr_get_elem(&itr->mem->tree, &pos)->v;
+		int cmp = vy_tuple_compare(t->data, itr->curr_tuple->data, itr->mem->key_def);
+		assert(cmp <= 0);
+		if (cmp < 0 || t->lsn >= break_lsn)
+			return rc;
+		itr->curr_pos = pos;
+		itr->curr_tuple = t;
+		rc = 1;
+	}
+	if (cmp == 0)
+		return rc;
+	pos = itr->curr_pos;
+	while (true) {
+		bps_tree_mem_itr_next(&itr->mem->tree, &pos);
+		if (bps_tree_mem_itr_is_invalid(&pos))
+			return rc;
+		struct vy_tuple *t =
+			bps_tree_mem_itr_get_elem(&itr->mem->tree, &pos)->v;
+		int cmp = vy_tuple_compare(t->data, last_tuple->data, itr->mem->key_def);
+		if (cmp > 0)
+			return rc;
+		if (cmp == 0) {
+			if (t->lsn < last_tuple->lsn) {
+				itr->curr_pos = pos;
+				itr->curr_tuple = t;
+				return 1;
+			}
+		} else if (t->lsn <= itr->vlsn) {
+			cmp = vy_tuple_compare(t->data, itr->curr_tuple->data, itr->mem->key_def);
+			if (cmp != 0) {
+				itr->curr_pos = pos;
+				itr->curr_tuple = t;
+				rc = 1;
+			}
+		}
+	}
+	assert(false);
+	return rc;
+}
+
+/**
  * Close an iterator and free all resources
  */
 static void
@@ -9502,4 +9617,437 @@ vy_tmp_mem_iterator_open(struct vy_iter *virt_iterator, struct vy_mem *mem,
 }
 
 /* }}} Temporary wrap of new mem iterator to old API */
+
+/* {{{ vy_tuple_iterator: Common interface for iterator over run, mem, etc */
+
+struct vy_tuple_iterator;
+
+typedef int (*vy_iterator_get_f)(struct vy_tuple_iterator *virt_iterator, struct vy_tuple **result);
+typedef int (*vy_iterator_next_key_f)(struct vy_tuple_iterator *virt_iterator);
+typedef int (*vy_iterator_next_lsn_f)(struct vy_tuple_iterator *virt_iterator);
+typedef int (*vy_iterator_restore_f)(struct vy_tuple_iterator *virt_iterator, struct vy_tuple *last_tuple);
+typedef void (*vy_iterator_next_close_f)(struct vy_tuple_iterator *virt_iterator);
+
+struct vy_tuple_iterator_iface {
+	vy_iterator_get_f get;
+	vy_iterator_next_key_f next_key;
+	vy_iterator_next_lsn_f next_lsn;
+	vy_iterator_restore_f restore;
+	vy_iterator_next_close_f close;
+};
+
+struct vy_tuple_iterator {
+	struct vy_tuple_iterator_iface *iface;
+	char priv[128];
+};
+
+/* }}} vy_tuple_iterator: Common interface for iterator over run, mem, etc */
+
+/* {{{ Virtual iterator over run */
+
+int
+vy_run_iterator_iface_get(struct vy_tuple_iterator *vitr,
+			  struct vy_tuple **result)
+{
+	assert(vitr->iface->get == vy_run_iterator_iface_get);
+	struct vy_run_iterator *itr = (struct vy_run_iterator *)vitr->priv;
+	return vy_run_iterator_get(itr, result);
+}
+
+int
+vy_run_iterator_iface_next_key(struct vy_tuple_iterator *vitr)
+{
+	assert(vitr->iface->next_key == vy_run_iterator_iface_next_key);
+	struct vy_run_iterator *itr = (struct vy_run_iterator *)vitr->priv;
+	return vy_run_iterator_next_key(itr);
+}
+
+int
+vy_run_iterator_iface_next_lsn(struct vy_tuple_iterator *vitr)
+{
+	assert(vitr->iface->next_lsn == vy_run_iterator_iface_next_lsn);
+	struct vy_run_iterator *itr = (struct vy_run_iterator *)vitr->priv;
+	return vy_run_iterator_next_lsn(itr);
+}
+
+int
+vy_run_iterator_iface_restore(struct vy_tuple_iterator *vitr,
+			      struct vy_tuple *last_tuple)
+{
+	assert(vitr->iface->restore == vy_run_iterator_iface_restore);
+	/* vy_run are not changed at all, so nothing to do with it */
+	(void)vitr;
+	(void)last_tuple;
+	return 0;
+}
+
+static void
+vy_run_iterator_iface_close(struct vy_tuple_iterator *vitr)
+{
+	assert(vitr->iface->close == vy_run_iterator_iface_close);
+	struct vy_run_iterator *itr = (struct vy_run_iterator *)vitr->priv;
+	vy_run_iterator_close(itr);
+}
+
+void
+vy_run_iterator_iface_open(struct vy_tuple_iterator *vitr, struct vy_index *index,
+			   struct vy_run *run, struct vy_file *file,
+			   struct vy_filterif *compression, enum vy_order order,
+			   char *key, int64_t vlsn)
+{
+	static struct vy_tuple_iterator_iface iface = {
+		.get = vy_run_iterator_iface_get,
+		.next_key = vy_run_iterator_iface_next_key,
+		.next_lsn = vy_run_iterator_iface_next_lsn,
+		.restore = vy_run_iterator_iface_restore,
+		.close = vy_run_iterator_iface_close
+	};
+	vitr->iface = &iface;
+	struct vy_run_iterator *itr = (struct vy_run_iterator *)vitr->priv;
+	assert(sizeof(vitr->priv) >= sizeof(*itr));
+	vy_run_iterator_open(itr, index, run, file, compression, order, key, vlsn);
+}
+
+/* }}} Virtual iterator over run */
+
+/* {{{ Virtual iterator over mem */
+
+int
+vy_mem_iterator_iface_get(struct vy_tuple_iterator *vitr,
+			  struct vy_tuple **result)
+{
+	assert(vitr->iface->get == vy_mem_iterator_iface_get);
+	struct vy_mem_iterator *itr = (struct vy_mem_iterator *)vitr->priv;
+	return vy_mem_iterator_get(itr, result);
+}
+
+int
+vy_mem_iterator_iface_next_key(struct vy_tuple_iterator *vitr)
+{
+	assert(vitr->iface->next_key == vy_mem_iterator_iface_next_key);
+	struct vy_mem_iterator *itr = (struct vy_mem_iterator *)vitr->priv;
+	return vy_mem_iterator_next_key(itr);
+}
+
+int
+vy_mem_iterator_iface_next_lsn(struct vy_tuple_iterator *vitr)
+{
+	assert(vitr->iface->next_lsn == vy_mem_iterator_iface_next_lsn);
+	struct vy_mem_iterator *itr = (struct vy_mem_iterator *)vitr->priv;
+	return vy_mem_iterator_next_lsn(itr);
+}
+
+int
+vy_mem_iterator_iface_restore(struct vy_tuple_iterator *vitr,
+			      struct vy_tuple *last_tuple)
+{
+	assert(vitr->iface->restore == vy_mem_iterator_iface_restore);
+	struct vy_mem_iterator *itr = (struct vy_mem_iterator *)vitr->priv;
+	return vy_mem_iterator_restore(itr, last_tuple);
+}
+
+static void
+vy_mem_iterator_iface_close(struct vy_tuple_iterator *vitr)
+{
+	assert(vitr->iface->close == vy_mem_iterator_iface_close);
+	struct vy_mem_iterator *itr = (struct vy_mem_iterator *)vitr->priv;
+	vy_mem_iterator_close(itr);
+}
+
+void
+vy_mem_iterator_iface_open(struct vy_tuple_iterator *vitr,
+			   struct vy_mem *mem,
+			   enum vy_order order, char *key, int64_t vlsn)
+{
+	static struct vy_tuple_iterator_iface iface = {
+		.get = vy_mem_iterator_iface_get,
+		.next_key = vy_mem_iterator_iface_next_key,
+		.next_lsn = vy_mem_iterator_iface_next_lsn,
+		.restore = vy_mem_iterator_iface_restore,
+		.close = vy_mem_iterator_iface_close
+	};
+	vitr->iface = &iface;
+	struct vy_mem_iterator *itr = (struct vy_mem_iterator *)vitr->priv;
+	assert(sizeof(vitr->priv) >= sizeof(*itr));
+	vy_mem_iterator_open(itr, mem, order, key, vlsn);
+}
+
+/* }} Virtual iterator over mem */
+
+/* {{{ Merge iterator */
+
+struct vy_merge_src {
+	struct vy_tuple_iterator itr;
+	bool is_mutable;
+	uint32_t front_id;
+};
+
+struct vy_merge_iterator {
+	struct vy_merge_src *src;
+	uint32_t src_count;
+	uint32_t src_capacity;
+	uint32_t curr_src;
+	uint32_t front_id;
+	uint32_t mutable_start;
+	uint32_t mutable_end;
+	struct key_def *key_def;
+	char *key;
+	int64_t vlsn;
+	struct vy_tuple *curr_tuple;
+	enum vy_order order;
+	bool unique_optimization;
+	bool is_in_uniq_opt;
+	bool search_started;
+};
+
+void
+vy_merge_iterator_open(struct vy_merge_iterator *itr, struct key_def *key_def, enum vy_order order, char *key, int64_t vlsn)
+{
+	itr->key_def = key_def;
+	itr->key = key;
+	itr->vlsn = vlsn;
+	itr->order = order;
+	itr->src = NULL;
+	itr->src_count = 0;
+	itr->src_capacity = 0;
+	itr->src = NULL;
+	itr->curr_src = UINT32_MAX;
+	itr->front_id = 1;
+	itr->mutable_start = 0;
+	itr->mutable_end = 0;
+	itr->unique_optimization = key != NULL &&
+		(order == VINYL_EQ || order == VINYL_GE || order == VINYL_LE) &&
+		vy_tuple_key_is_full(key, key_def);
+	itr->is_in_uniq_opt = false;
+	itr->search_started = false;
+	itr->curr_tuple = NULL;
+}
+
+void
+vy_merge_iterator_close(struct vy_merge_iterator *itr)
+{
+	if (itr->curr_tuple != NULL) {
+		vy_tuple_unref(itr->curr_tuple);
+		itr->curr_tuple = NULL;
+	}
+	for (size_t i = 0; i < itr->src_count; i++)
+		itr->src[i].itr.iface->close(&itr->src[i].itr);
+	free(itr->src);
+	itr->src_count = 0;
+	itr->src_capacity = 0;
+	itr->src = NULL;
+}
+
+int
+vy_merge_iterator_reserve(struct vy_merge_iterator *itr, uint32_t capacity)
+{
+	if (itr->src_capacity >= capacity)
+		return 0;
+	struct vy_merge_src *new_src = malloc(capacity * sizeof(*new_src));
+	if (new_src == NULL)
+		return -1;
+	if (itr->src_count > 0) {
+		memcpy(new_src, itr->src, itr->src_count * sizeof(*new_src));
+		free(itr->src);
+	}
+	itr->src = new_src;
+	itr->src_capacity = capacity;
+	return 0;
+}
+
+struct vy_tuple_iterator *
+vy_merge_iterator_add(struct vy_merge_iterator *itr, bool is_mutable)
+{
+	assert(!itr->search_started);
+	if (itr->src_count == itr->src_capacity) {
+		if (vy_merge_iterator_reserve(itr, itr->src_count + 1) != 0)
+			return NULL;
+	}
+	if (is_mutable) {
+		if (itr->mutable_start == itr->mutable_end)
+			itr->mutable_start = itr->src_count;
+		itr->mutable_end = itr->src_count + 1;
+	}
+	itr->src[itr->src_count].front_id = 0;
+	struct vy_merge_src *src = &itr->src[itr->src_count++];
+	src->is_mutable = is_mutable;
+	return &src->itr;
+}
+
+int
+vy_merge_iterator_propagate(struct vy_merge_iterator *itr)
+{
+	for (uint32_t i = 0; i < itr->src_count; i++) {
+		if (itr->src[i].front_id != itr->front_id)
+			continue;
+		if (itr->src[i].itr.iface->next_key(&itr->src[i].itr) < 0)
+			return -1;
+	}
+	itr->front_id++;
+	return 0;
+}
+
+int
+vy_merge_iterator_locate_uniq_opt(struct vy_merge_iterator *itr)
+{
+	assert(itr->src_count);
+	itr->search_started = true;
+	itr->unique_optimization = false;
+	struct vy_tuple *min_tuple;
+restart:
+	itr->is_in_uniq_opt = false;
+	min_tuple = NULL;
+	itr->curr_src = UINT32_MAX;
+	for (uint32_t i = 0; i < itr->src_count; i++) {
+		struct vy_tuple_iterator *sub_itr = &itr->src[i].itr;
+		struct vy_tuple *t;
+		int rc = sub_itr->iface->get(sub_itr, &t);
+		if (rc > 0)
+			continue;
+		if (rc < 0)
+			return rc;
+		if (vy_tuple_compare(t->data, itr->key, itr->key_def) == 0) {
+			itr->src[i].front_id = ++itr->front_id;
+			min_tuple = t;
+			itr->curr_src = i;
+			itr->is_in_uniq_opt = true;
+			break;
+		}
+		int cmp = min_tuple == NULL ? -1 :
+			  vy_tuple_compare(t->data, min_tuple->data, itr->key_def);
+		if (cmp == 0) {
+			itr->src[i].front_id = itr->front_id;
+		} else if (cmp < 0) {
+			itr->src[i].front_id = ++itr->front_id;
+			min_tuple = t;
+			itr->curr_src = i;
+		}
+	}
+	bool must_restart = false;
+	for (uint32_t i = itr->mutable_start; i < itr->mutable_end; i++) {
+		struct vy_tuple_iterator *sub_itr = &itr->src[i].itr;
+		if (sub_itr->iface->restore(sub_itr, NULL) != 0)
+			must_restart = true;
+	}
+	if (must_restart)
+		goto restart;
+	if (itr->curr_tuple != NULL)
+		vy_tuple_unref(itr->curr_tuple);
+	itr->curr_tuple = min_tuple;
+	if (min_tuple != NULL) {
+		vy_tuple_ref(itr->curr_tuple);
+		return 0;
+	}
+	return 1;
+}
+
+int
+vy_merge_iterator_locate(struct vy_merge_iterator *itr)
+{
+	assert(itr->src_count);
+	if (itr->unique_optimization)
+		return vy_merge_iterator_locate_uniq_opt(itr);
+	itr->search_started = true;
+	struct vy_tuple *min_tuple = NULL;
+	itr->curr_src = UINT32_MAX;
+	for (uint32_t i = itr->src_count; i--;) {
+		struct vy_tuple_iterator *sub_itr = &itr->src[i].itr;
+		struct vy_tuple *t;
+		sub_itr->iface->restore(sub_itr, itr->curr_tuple);
+		int rc = sub_itr->iface->get(sub_itr, &t);
+		if (rc < 0)
+			return rc;
+		if (rc > 0)
+			continue;
+		int cmp = min_tuple == NULL ? -1 :
+			vy_tuple_compare(t->data, min_tuple->data, itr->key_def);
+		if (cmp <= 0) {
+			itr->front_id += cmp < 0;
+			itr->src[i].front_id = itr->front_id;
+			min_tuple = t;
+			itr->curr_src = i;
+		}
+	}
+	if (itr->curr_tuple != NULL)
+		vy_tuple_unref(itr->curr_tuple);
+	itr->curr_tuple = min_tuple;
+	if (min_tuple != NULL) {
+		vy_tuple_ref(itr->curr_tuple);
+		return 0;
+	}
+	return 1;
+}
+
+int
+vy_merge_iterator_get(struct vy_merge_iterator *itr, struct vy_tuple **result)
+{
+	if (!itr->search_started && vy_merge_iterator_locate(itr) < 0)
+		return -1;
+	*result = itr->curr_tuple;
+	return itr->curr_tuple != NULL ? 0 : 1;
+}
+
+int
+vy_merge_iterator_next_key(struct vy_merge_iterator *itr)
+{
+	if (!itr->search_started && vy_merge_iterator_locate(itr) < 0)
+		return -1;
+	if (itr->is_in_uniq_opt) {
+		itr->is_in_uniq_opt = false;
+		if (vy_merge_iterator_locate(itr) < 0)
+			return -1;
+	}
+	if (vy_merge_iterator_propagate(itr) < 0)
+		return -1;
+	return vy_merge_iterator_locate(itr);
+}
+
+int
+vy_merge_iterator_next_lsn(struct vy_merge_iterator *itr)
+{
+	if (!itr->search_started && vy_merge_iterator_locate(itr) < 0)
+		return -1;
+	if (itr->curr_src == UINT32_MAX)
+		return 1;
+	struct vy_tuple_iterator *sub_itr = &itr->src[itr->curr_src].itr;
+	int rc = sub_itr->iface->next_lsn(sub_itr);
+	if (rc < 0) {
+		return rc;
+	} else if (rc == 0) {
+		if (itr->curr_tuple != NULL)
+			vy_tuple_unref(itr->curr_tuple);
+		rc = sub_itr->iface->get(sub_itr, &itr->curr_tuple);
+		assert(rc == 0);
+		vy_tuple_ref(itr->curr_tuple);
+		return rc;
+	}
+	for (uint32_t i = itr->curr_src + 1; i < itr->src_count; i++) {
+		if (itr->is_in_uniq_opt) {
+			sub_itr = &itr->src[i].itr;
+			struct vy_tuple *t;
+			rc = sub_itr->iface->get(sub_itr, &t);
+			if (rc < 0)
+				return -1;
+			if (rc > 0)
+				continue;
+			if (vy_tuple_compare(t->data, itr->key, itr->key_def) == 0) {
+				itr->src[i].front_id = itr->front_id;
+				itr->curr_src = i;
+				if (itr->curr_tuple != NULL)
+					vy_tuple_unref(itr->curr_tuple);
+				itr->curr_tuple = t;
+				vy_tuple_ref(t);
+				return 0;
+			}
+
+		} else if (itr->src[i].front_id == itr->front_id) {
+			itr->curr_src = i;
+			return 0;
+		}
+	}
+	itr->is_in_uniq_opt = false;
+	return 1;
+}
+
+/* }}} Merge iterator */
 
