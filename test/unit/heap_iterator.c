@@ -77,6 +77,31 @@ test_iterator_create() {
 }
 
 static void
+test_iterator_empty() {
+	header();
+	struct heap_test_node *nd;
+	struct heap_test_core heap;
+	heap_test_init(&heap);
+
+	struct heap_test_iterator it;
+	heap_test_iterator_init(&heap, &it);
+
+	nd = heap_test_iterator_next(&it);
+
+	if (nd)
+		fail("incorrect node", "nd != NULL");
+	if (it.mask != 0)
+		fail("incorrect mask after create", "it.mask != 0");
+	if (it.depth != 0)
+		fail("incorrect depth", "it.depth != 0");
+
+	free_all_nodes(&heap);
+
+	footer();
+}
+
+
+static void
 test_iterator_small() {
 	header();
 	struct test_type *value, *root_value;
@@ -200,6 +225,7 @@ main(int argc, const char** argv)
 {
 	srand(179);
 	test_iterator_create();
+	test_iterator_empty();
 	test_iterator_small();
 	test_iterator_large();
 }

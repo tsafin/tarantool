@@ -782,6 +782,10 @@ static inline void HEAP(iterator_init)
 static inline struct HEAP(node) * HEAP(iterator_next)
 (struct HEAP(iterator) *it) {
 	struct HEAP(node) *cnode = it->current_node;
+
+	if (!cnode)
+		return NULL;
+
 	if (cnode && cnode->left) {
 		it->mask = it->mask & (~ (1 << it->depth));
 		it->depth++;
