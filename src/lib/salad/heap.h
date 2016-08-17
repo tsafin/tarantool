@@ -133,55 +133,55 @@ struct HEAP(iterator) {
 /**
  * Init heap.
  */
- inline static void
+ static inline void
  HEAP(init)(struct HEAP(core) *heap);
 
 /**
  * Returns size of according to root.
  */
-inline static uint64_t
+static inline uint64_t
 HEAP(size)(struct HEAP(core) *heap);
 
 /**
  * Returns root node of heap.
  */
-static struct HEAP(node) *
+static inline struct HEAP(node) *
 HEAP(get_root)(struct HEAP(node) *node);
 
 /**
  * Erase min value.
  */
-static struct HEAP(node) *
+static inline struct HEAP(node) *
 HEAP(pop)(struct HEAP(core) *heap);
 
 /**
  * Insert value.
  */
-static void
+static inline void
 HEAP(insert)(struct HEAP(core) *heap, struct HEAP(node) *nd);
 
 /**
  * Delete node from heap.
  */
-static void
+static inline void
 HEAP(delete)(struct HEAP(core) *heap, struct HEAP(node) *value_node);
 
 /**
  * Heapify tree after update of value under value_node pointer.
  */
-static void
+static inline void
 HEAP(update)(struct HEAP(core) *heap, struct HEAP(node) *value_node);
 
 /**
  * Heap iterator init.
  */
-static void HEAP(iterator_init)
+static inline void HEAP(iterator_init)
 (struct HEAP(core) *heap, struct HEAP(iterator) *it);
 
 /**
  * Heap iterator next.
  */
-static struct HEAP(node) *
+static inline struct HEAP(node) *
 HEAP(iterator_next) (struct HEAP(iterator) *it);
 
 /**
@@ -192,7 +192,7 @@ HEAP(iterator_next) (struct HEAP(iterator) *it);
 /**
  * Debug function. Check heap invariants for pair node, parent.
  */
-static bool
+static inline bool
 HEAP(check_local_invariants) (struct HEAP(core) *heap,
 				struct HEAP(node) *node,
 				struct HEAP(node) *parent);
@@ -200,7 +200,7 @@ HEAP(check_local_invariants) (struct HEAP(core) *heap,
 /*
  * Debug function. Check heap invariants for all nodes.
  */
-static bool
+static inline bool
 HEAP(check_invariants)(struct HEAP(core) *heap,
 			struct HEAP(node) *node,
 			struct HEAP(node) *parent);
@@ -211,25 +211,25 @@ HEAP(check_invariants)(struct HEAP(core) *heap,
 /**
  * Init heap node.
  */
-static void
+static inline void
 HEAP(init_node)(struct HEAP(node) *node);
 
 /**
  * Swap two parent and son.
  */
-static void
+static inline void
 HEAP(swap_parent_and_son)(struct HEAP(node) *parent, struct HEAP(node) *son);
 
 /**
  * Update parent field of children.
  */
-static void
+static inline void
 HEAP(push_info_to_children)(struct HEAP(node) *node);
 
 /**
  * Update left or right field of parent.
  */
-inline static void
+static inline void
 HEAP(push_info_to_parent)(struct HEAP(node) *parent, struct HEAP(node) *son);
 
 /**
@@ -286,7 +286,7 @@ HEAP(dec_size)(struct HEAP(node) *node);
 /**
  * Init heap node.
  */
-inline static void
+static inline void
 HEAP(init_node)(struct HEAP(node) *node) {
 	node->size = 1;
 	node->left = NULL;
@@ -297,7 +297,7 @@ HEAP(init_node)(struct HEAP(node) *node) {
 /**
  * Init heap.
  */
- inline static void
+ static inline void
  HEAP(init)(struct HEAP(core) *heap) {
 	heap->root = NULL;
  }
@@ -305,7 +305,7 @@ HEAP(init_node)(struct HEAP(node) *node) {
 /**
  * Returns size of according to root.
  */
-inline static uint64_t
+static inline uint64_t
 HEAP(size)(struct HEAP(core) *heap) {
 	assert(heap);
 	return (heap->root ? heap->root->size : 0);
@@ -314,7 +314,7 @@ HEAP(size)(struct HEAP(core) *heap) {
 /**
  * Returns size of subtree according to choldren sizes.
  */
-inline static uint64_t
+static inline uint64_t
 HEAP(get_size_from_children)(struct HEAP(node) *node) {
 	if (node == NULL) {
 		return 0;
@@ -333,7 +333,7 @@ HEAP(get_size_from_children)(struct HEAP(node) *node) {
 /**
  * Returns root node of heap.
  */
-inline static struct HEAP(node) *
+static inline struct HEAP(node) *
 HEAP(get_root)(struct HEAP(node) *node) {
 	assert(node);
 	while (node->parent) {
@@ -346,7 +346,7 @@ HEAP(get_root)(struct HEAP(node) *node) {
 /**
  * Check that current tree is full binary tree.
  */
-inline static bool
+static inline bool
 HEAP(is_full)(const struct HEAP(node) *root) {
 	assert(root);
 	/*check that size + 1 is 2^n for some n*/
@@ -356,7 +356,7 @@ HEAP(is_full)(const struct HEAP(node) *root) {
 /**
  * Update parent field of children.
  */
-inline static void
+static inline void
 HEAP(push_info_to_children)(struct HEAP(node) *node) {
  assert(node);
  if (node->left) {
@@ -370,7 +370,7 @@ HEAP(push_info_to_children)(struct HEAP(node) *node) {
 /**
  * Update left or right field of parent.
  */
-inline static void
+static inline void
 HEAP(push_info_to_parent)(struct HEAP(node) *parent, struct HEAP(node) *son) {
 	assert(parent);
 	assert(son);
@@ -389,7 +389,7 @@ HEAP(push_info_to_parent)(struct HEAP(node) *parent, struct HEAP(node) *son) {
 /**
  * Cut leaf. Node is a pointer to leaf.
  */
-inline static void
+static inline void
 HEAP(cut_leaf)(struct HEAP(node) *node) {
 	assert(node);
 	assert(node->left == NULL);
@@ -417,7 +417,7 @@ HEAP(cut_leaf)(struct HEAP(node) *node) {
 /**
  * Swap two connected(i.e parent and son) nodes.
  */
-inline static void
+static inline void
 HEAP(swap_parent_and_son)(struct HEAP(node) *parent, struct HEAP(node) *son) {
 	assert(parent);
 	assert(son);
@@ -533,6 +533,7 @@ HEAP(get_last)(struct HEAP(node) *root) {
  */
 static void
 HEAP(sift_up)(struct HEAP(core) *heap, struct HEAP(node) *node) {
+	(void) heap;
 	assert(node);
 	struct HEAP(node) *parent = node->parent;
 	while (parent && HEAP_LESS(heap, node, parent)) {
@@ -546,6 +547,7 @@ HEAP(sift_up)(struct HEAP(core) *heap, struct HEAP(node) *node) {
  */
 static void
 HEAP(sift_down)(struct HEAP(core) *heap, struct HEAP(node) *node) {
+	(void) heap;
 	assert(node);
 	struct HEAP(node) *left = node->left;
 	struct HEAP(node) *right = node->right;
@@ -599,8 +601,9 @@ HEAP(dec_size)(struct HEAP(node) *node) {
 /**
  * Insert value.
  */
-static void
+static inline void
 HEAP(insert)(struct HEAP(core) *heap, struct HEAP(node) *node) {
+	(void) heap;
 	assert(heap);
 
 	if (node == NULL) {
@@ -633,8 +636,9 @@ HEAP(insert)(struct HEAP(core) *heap, struct HEAP(node) *node) {
 /**
  * Erase min value. Returns delete value.
  */
-inline static struct HEAP(node) *
+static inline struct HEAP(node) *
 HEAP(pop)(struct HEAP(core) *heap) {
+	(void) heap;
 	assert(heap);
 	struct HEAP(node) *res = heap->root;
 	HEAP(delete)(heap, heap->root);
@@ -644,8 +648,9 @@ HEAP(pop)(struct HEAP(core) *heap) {
 /*
  * Delete node from heap.
  */
-static void
+static inline void
 HEAP(delete)(struct HEAP(core) *heap, struct HEAP(node) *value_node) {
+	(void) heap;
 	assert(heap);
 	struct HEAP(node) *root = heap->root;
 	struct HEAP(node) *last_node = HEAP(get_last)(root);
@@ -690,8 +695,9 @@ HEAP(delete)(struct HEAP(core) *heap, struct HEAP(node) *value_node) {
 /**
  * Heapify tree after update of value under value_node pointer.
  */
-inline static void
+static inline void
 HEAP(update)(struct HEAP(core) *heap, struct HEAP(node) *value_node) {
+	(void) heap;
 	assert(heap);
 	/* heapify */
 	HEAP(sift_down)(heap, value_node);
@@ -705,10 +711,11 @@ HEAP(update)(struct HEAP(core) *heap, struct HEAP(node) *value_node) {
 /**
  * Debug function. Check heap invariants for pair node, parent.
  */
-inline static bool
+static inline bool
 HEAP(check_local_invariants) (struct HEAP(core) *heap,
 				struct HEAP(node) *parent,
 				struct HEAP(node) *node) {
+	(void) heap;
 	assert(node);
 
 	if (parent != node->parent) {
@@ -739,10 +746,11 @@ HEAP(check_local_invariants) (struct HEAP(core) *heap,
 /**
  * Debug function. Check heap invariants for all nodes.
  */
-static bool
+static inline bool
 HEAP(check_invariants)(struct HEAP(core) *heap,
 			struct HEAP(node) *parent,
 			struct HEAP(node) *node) {
+	(void) heap;
 	if (!node) {
 		return true;
 	}
@@ -760,8 +768,9 @@ HEAP(check_invariants)(struct HEAP(core) *heap,
 /**
  * Heap iterator init.
  */
-inline static void HEAP(iterator_init)
+static inline void HEAP(iterator_init)
 (struct HEAP(core) *heap, struct HEAP(iterator) *it) {
+	(void) heap;
 	it->current_node = heap->root;
 	it->mask = 0;
 	it->depth = 0;
@@ -770,7 +779,7 @@ inline static void HEAP(iterator_init)
 /**
  * Heap iterator next.
  */
-static struct HEAP(node) * HEAP(iterator_next)
+static inline struct HEAP(node) * HEAP(iterator_next)
 (struct HEAP(iterator) *it) {
 	struct HEAP(node) *cnode = it->current_node;
 	if (cnode && cnode->left) {
