@@ -483,6 +483,77 @@ test_insert_update_workload() {
 	footer();
 }
 
+static void
+test_random_delete_workload() {
+	header();
+	uint32_t nodes_it = 0;
+	uint64_t current_size = 0;
+	const uint32_t TEST_CASE_SIZE = 10000;
+	uint32_t ans = UINT_MAX;
+
+	struct test_type *value, *root_value;
+	struct heap_test_core heap;
+	heap_test_init(&heap);
+
+	struct test_type **nodes = (struct test_type **)
+		malloc(sizeof(struct test_type *) * TEST_CASE_SIZE);
+
+	struct heap_test_node *test_node = NULL, *root = NULL;
+	for(uint32_t i = 0; i < TEST_CASE_SIZE; ++i) {
+		if (nodes_it == current_size ||
+			heap_test_size(&heap) == 0 ||
+			rand() % 5) {
+
+			value = (struct test_type *)
+				malloc(sizeof(struct test_type));
+			value->val1 = rand();
+
+			nodes[current_size++] = value;
+			heap_test_insert(&heap, &value->node);
+		}
+		else {
+			heap_test_delete(&heap, &(nodes[nodes_it]->node));
+			current_size--;
+			nodes_it++;
+		}
+
+		if (!heap_test_check_invariants(&heap, 0, heap.root)) {
+			fail("check heap invariants failed",
+				"heap_test_check_invariants(0, root)");
+		}
+		if (heap_test_size(&heap) != current_size) {
+			fail("check that size is correct",
+				"heap_test_size(root) != current_size");
+		}
+	}
+
+	free_all_nodes(&heap);
+	free(nodes);
+	footer();
+}
+
+static void
+test_delete_last_node() {
+	header();
+	struct test_type *value, *root_value;
+	struct heap_test_core heap;
+	heap_test_init(&heap);
+
+	for (int i = 0; i < 4; ++i) {
+		value = (struct test_type *)
+			malloc(sizeof(struct test_type));
+		value->val1 = 0;
+		heap_test_insert(&heap, &value->node);
+	}
+
+	heap_test_delete(&heap, &value->node);
+	if (!heap_test_check_invariants(&heap, 0, heap.root)) {
+		fail("check heap invariants failed",
+			"heap_test_check_invariants(0, root)");
+	}
+
+	footer();
+}
 
 int
 main(int argc, const char** argv)
@@ -499,4 +570,6 @@ main(int argc, const char** argv)
 	test_insert_pop_workload();
 	test_pop_last();
 	test_insert_update_workload();
+	test_random_delete_workload();
+	test_delete_last_node();
 }

@@ -630,6 +630,11 @@ HEAP(delete)(struct HEAP(core) *heap, struct HEAP(node) *value_node) {
 	/* cut leaf */
 	HEAP(cut_leaf)(last_node);
 
+	/* check that we try to delete last node */
+	if (value_node == last_node) {
+		return;
+	}
+
 	/* insert last_node as root */
 	last_node->parent = value_node->parent;
 	last_node->left = value_node->left;

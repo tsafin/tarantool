@@ -20,3 +20,7 @@
 	*** test_pop_last: done ***
 	*** test_insert_update_workload ***
 	*** test_insert_update_workload: done ***
+	*** test_random_delete_workload ***
+	*** test_random_delete_workload: done ***
+	*** test_delete_last_node ***
+	*** test_delete_last_node: done ***
