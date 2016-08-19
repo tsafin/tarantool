@@ -2614,6 +2614,19 @@ struct read_set_key {
 
 typedef rb_tree(struct txv) write_set_t;
 
+struct heap_tx_core;
+struct heap_tx_node;
+
+static int tx_heap_cmp(struct heap_tx_core *heap,
+			struct heap_tx_node *left,
+			struct heap_tx_node *right);
+
+#define HEAP_NAME _tx
+#define HEAP_LESS(a, b, c) tx_heap_cmp(a, b, c)
+
+#include "salad/heap.h"
+
+
 struct vy_tx {
 	/**
 	 * In memory transaction log. Contains both reads
@@ -2637,7 +2650,7 @@ struct vy_tx {
 	 * transactional read view.
 	 */
 	int64_t   vlsn;
-	rb_node(struct vy_tx) tree_node;
+	struct heap_tx_node heap_node;
 	/*
 	 * For non-autocommit transactions, the list of open
 	 * cursors. When a transaction ends, all open cursors are
@@ -2822,20 +2835,19 @@ vy_tx_is_ro(struct vy_tx *tx)
 		tx->write_set.rbt_root == &tx->write_set.rbt_nil;
 }
 
-typedef rb_tree(struct vy_tx) tx_tree_t;
-
 static int
-tx_tree_cmp(tx_tree_t *rbtree, struct vy_tx *a, struct vy_tx *b)
+tx_heap_cmp(struct heap_tx_core *heap,
+		struct heap_tx_node *a_node,
+		struct heap_tx_node *b_node)
 {
-	(void)rbtree;
+	(void)heap;
+	struct vy_tx *a = container_of(a_node, struct vy_tx, heap_node);
+	struct vy_tx *b = container_of(b_node, struct vy_tx, heap_node);
 	return vy_cmp(a->tsn, b->tsn);
 }
 
-rb_gen(, tx_tree_, tx_tree_t, struct vy_tx, tree_node,
-       tx_tree_cmp);
-
 struct tx_manager {
-	tx_tree_t tree;
+	struct heap_tx_core heap;
 	uint32_t    count_rd;
 	uint32_t    count_rw;
 	/** Transaction logical time. */
@@ -2857,7 +2869,7 @@ tx_manager_new(struct vy_env *env)
 		diag_set(OutOfMemory, sizeof(*m), "tx_manager", "struct");
 		return NULL;
 	}
-	tx_tree_new(&m->tree);
+	heap_tx_init(&m->heap);
 	m->count_rd = 0;
 	m->count_rw = 0;
 	m->tsn = 0;
@@ -2896,7 +2908,7 @@ vy_tx_begin(struct tx_manager *m, struct vy_tx *tx, enum tx_type type)
 	tx->tsn = ++m->tsn;
 	tx->vlsn = vy_sequence(m->env->seq, VINYL_LSN);
 
-	tx_tree_insert(&m->tree, tx);
+	heap_tx_insert(&m->heap, &tx->heap_node);
 	if (type == VINYL_TX_RO)
 		m->count_rd++;
 	else
@@ -2925,14 +2937,18 @@ vy_tx_track(struct vy_tx *tx, struct vy_index *index,
 static inline void
 tx_manager_end(struct tx_manager *m, struct vy_tx *tx)
 {
-	bool was_oldest = tx == tx_tree_first(&m->tree);
-	tx_tree_remove(&m->tree, tx);
+	struct vy_tx *rt_tx = container_of(m->heap.root, struct vy_tx, heap_node);
+	bool was_oldest = tx == rt_tx;
+	heap_tx_delete(&m->heap, &tx->heap_node);
 	if (tx->type == VINYL_TX_RO)
 		m->count_rd--;
 	else
 		m->count_rw--;
 	if (was_oldest) {
-		struct vy_tx *oldest = tx_tree_first(&m->tree);
+		struct heap_tx_node *root = m->heap.root;
+		rt_tx = (root ?
+			container_of(root, struct vy_tx, heap_node) : NULL);
+		struct vy_tx *oldest = rt_tx;
 		vy_sequence_lock(m->env->seq);
 		m->env->seq->vlsn = oldest ? oldest->vlsn :
 			m->env->seq->lsn;
@@ -9333,4 +9349,3 @@ vy_tmp_mem_iterator_open(struct vy_iter *virt_iterator, struct vy_mem *mem,
 }
 
 /* }}} Temporary wrap of new mem iterator to old API */
-
