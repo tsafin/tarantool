@@ -11,6 +11,8 @@
 #include <intrin.h>
 #ifdef __cplusplus // TTSxxx+
 #include <xutility>
+#else
+#define _DEBUG_ERROR(x)
 #endif // TTSxxx-
 
  #pragma pack(push,_CRT_PACKING)
@@ -173,6 +175,7 @@ typedef unsigned _LONGLONG _Uint8_t;
 
   #ifndef _INVALID_MEMORY_ORDER
 
+  #ifdef __cplusplus
    #if _ITERATOR_DEBUG_LEVEL == 2
     #define _INVALID_MEMORY_ORDER \
      {_DEBUG_ERROR("Invalid memory_order"); \
@@ -185,6 +188,9 @@ typedef unsigned _LONGLONG _Uint8_t;
    #elif _ITERATOR_DEBUG_LEVEL == 0
     #define _INVALID_MEMORY_ORDER
    #endif /* _ITERATOR_DEBUG_LEVEL */
+  #else // =__cplusplus
+   #define _INVALID_MEMORY_ORDER
+  #endif // __cplusplus
   #endif /* _INVALID_MEMORY_ORDER */
 
 inline memory_order _Memory_order_upper_bound(memory_order _Order1,

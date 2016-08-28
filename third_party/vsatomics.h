@@ -37,6 +37,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <crtdbg.h>
 #include <xatomic.h>
 
 #ifdef __cplusplus
@@ -118,6 +119,7 @@ _STD_BEGIN
  * 7.17.6 Atomic integer types.
  */
 
+#if 0
 #ifndef __cplusplus
 typedef _Atomic_bool		atomic_bool;
 typedef _Atomic_char		atomic_char;
@@ -160,7 +162,9 @@ typedef _Atomic_ullong		atomic_uint_fast64_t;
 typedef _Atomic_llong		atomic_intmax_t;
 typedef _Atomic_ullong		atomic_uintmax_t;
 #endif
-
+#else
+typedef _Uint8_t		atomic_uintmax_t;
+#endif
 
 /*
  * 7.17.7 Operations on atomic types.
