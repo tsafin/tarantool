@@ -78,7 +78,7 @@
 #define	PMATOMIC_H__
 
 #ifdef _MSC_VER
-  #include <vsatomics.h>
+  #include <pmvcatomic.h>
 #else
 /* Compiler-fu */
 #if !defined(__has_feature)
