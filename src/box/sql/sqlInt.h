@@ -75,6 +75,7 @@
 #include "box/sql.h"
 #include "box/txn.h"
 #include "trivia/util.h"
+#include "sql_ast.h"
 
 /*
  * These #defines should enable >2GB file support on POSIX if the
@@ -1986,6 +1987,7 @@ struct Select {
 #define SF_Converted      0x10000	/* By convertCompoundSelectToSubquery() */
 /** Abort subquery if its output contains more than one row. */
 #define SF_SingleRow      0x20000
+#define SF_CachedAST      0x40000	/* reusing previously parsed AST */
 
 /*
  * The results of a SELECT can be distributed in several ways, as defined
@@ -2121,14 +2123,6 @@ struct TriggerPrg {
 	int orconf;		/* Default ON CONFLICT policy */
 	/* Masks of old.*, new.* columns accessed. */
 	uint64_t column_mask[2];
-};
-
-enum ast_type {
-	AST_TYPE_UNDEFINED = 0,
-	AST_TYPE_SELECT,
-	AST_TYPE_EXPR,
-	AST_TYPE_TRIGGER,
-	ast_type_MAX
 };
 
 /*
@@ -2276,20 +2270,30 @@ struct Parse {
 	bool initiateTTrans;	/* Initiate Tarantool transaction */
 	/** If set - do not emit byte code at all, just parse.  */
 	bool parse_only;
-	/** Type of parsed_ast member. */
-	enum ast_type parsed_ast_type;
 	/** SQL options which were used to compile this VDBE. */
 	uint32_t sql_flags;
 	/**
-	 * Members of this union are valid only
-	 * if parse_only is set to true.
+	 * Members of this structure are filled only
+	 * if @parse_only is set to true.
 	 */
-	union {
-		struct Expr *expr;
-		struct Select *select;
-		struct sql_trigger *trigger;
-	} parsed_ast;
+	struct sql_parsed_ast parsed_ast;
 };
+
+#define SQL_PARSE_AST_MODE(parser)	(parser)->parse_only
+#define SQL_PARSE_KEEP_AST_MODE(parser)	\
+	(SQL_PARSE_AST_MODE(parser) && 	\
+	(parser)->parsed_ast.keep_ast)
+
+#define AST_VALID(ast)	(ast != NULL && \
+	(ast)->keep_ast && (ast)->ast_type != AST_TYPE_UNDEFINED)
+
+// AST created for known and supported SQL statements
+// e.g. for SELECT at the moment
+#define SQL_PARSE_VALID_AST(parser)	\
+	(SQL_PARSE_AST_MODE(parser) && AST_VALID(&(parser)->parsed_ast))
+// SQL parsed and VDBE constructed
+#define SQL_PARSE_VALID_VDBE(parser)	\
+	((parser)->pVdbe != NULL)
 
 /*
  * Bitfield flags for P5 value in various opcodes.
