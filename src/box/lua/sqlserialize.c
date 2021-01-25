@@ -215,13 +215,19 @@ sql_walk_expr_list(struct Walker * base, struct ExprList * p, const char *title)
 	char * data = ibuf->wpos;
 	assert(title != NULL);
 	OUT_TITLE_(walker->ibuf, title);
-	struct ExprList_item *pItem;
+	struct ExprList_item *pItem = pItem = p->a;
 	int i;
 	int n_elems = p->nExpr;
 	OUT_ARRAY_N(ibuf, n_elems);
-	for (i = n_elems, pItem = p->a; i > 0; i--, pItem++) {
-		if (sql_walk_expr(base, pItem->pExpr, NULL))
+	for (i = n_elems; i > 0; i--, pItem++) {
+		OUT_MAP_N(ibuf, 6);
+		if (sql_walk_expr(base, pItem->pExpr, "subexpr"))
 			return WRC_Abort;
+		OUT_VS(ibuf, pItem, zName);
+		OUT_VS(ibuf, pItem, zSpan);
+		OUT_V(ibuf, pItem, sort_order, uint);
+		OUT_V(ibuf, pItem, bits, uint);
+		OUT_V(ibuf, pItem, u.iConstExprReg, Xint);
 	}
 	assert(n_elems == (p->nExpr - i));
 	return WRC_Continue;

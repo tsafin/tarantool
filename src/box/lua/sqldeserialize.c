@@ -36,6 +36,22 @@ struct span_view {
 	uint32_t length;
 };
 
+static inline char *
+sql_name_from_span(struct sql *db, const struct span_view *token)
+{
+	assert(token != NULL && token->ptr != NULL);
+	int sz = token->length;
+	char *ptr = sqlDbMallocRawNN(db, sz + 1);
+	if (ptr == NULL)
+		return NULL;
+
+	memcpy(ptr, token->ptr, sz);
+	ptr[sz] = '\0';
+
+	return ptr;
+}
+
+
 #define ON_(span, expected) \
 	if (span.length == (sizeof(expected) - 1) && \
 	    strncmp(expected, span.ptr, span.length) == 0)
@@ -210,12 +226,35 @@ mp_decode_expr(const char **data)
 static struct ExprList *
 mp_decode_expr_list(const char **data)
 {
+	struct sql *db = sql_get();
+	struct ExprList_item *pItem = NULL;
 	struct ExprList * p = NULL;
+
 	int n_elems = EXPECT_ARRAY(data);
 	for (int i = 0; i < n_elems; i++) {
-		struct Expr * expr = mp_decode_expr(data);
-		p = sql_expr_list_append(sql_get(), p, expr);
+		int items = EXPECT_MAP(data);
+		struct span_view zName, zSpan;
+		for (int j = 0; j < items; j++) {
+			struct span_view key;
+			EXPECT_KEY(data, key);
+			ON_(key, "subexpr") {
+				struct Expr * expr = mp_decode_expr(data);
+				p = sql_expr_list_append(sql_get(), p, expr);
+				pItem = &p->a[p->nExpr - 1];
+			}
+
+			IN_VS(data, zName);
+			IN_VS(data, zSpan);
+			IN_V(data, *pItem, sort_order, uint);
+			IN_V(data, *pItem, bits, uint);
+			IN_V(data, *pItem, u.iConstExprReg, Xint);
+		}
+		if (zName.length > 0)
+			pItem->zName = sql_name_from_span(db, &zName);
+		if (zSpan.length > 0)
+			pItem->zSpan = sql_name_from_span(db, &zSpan);
 	}
+	assert(n_elems == p->nExpr);
 	return p;
 }
 
@@ -249,14 +288,6 @@ mp_decode_select_expr(const char **data, struct Select *p, struct span_view key)
 		p->pSrc = mp_decode_select_from(data);
 	}
 
-}
-
-static inline char *
-sql_name_from_span(struct sql *db, const struct span_view *token)
-{
-	assert(token != NULL && token->ptr != NULL);
-
-	return sql_normalized_name_db_new(db, token->ptr, token->length);
 }
 
 static struct IdList *
@@ -362,6 +393,9 @@ mp_decode_select(const char **data, bool subselect)
 			&sParse, NULL, NULL, NULL, NULL, NULL, NULL,
 			0, NULL, NULL
 		);
+		assert(p != NULL);
+		if (p == NULL)
+			return NULL;
 		if (pSelect == NULL)
 			pSelect = p;
 
@@ -382,8 +416,10 @@ mp_decode_select(const char **data, bool subselect)
 			mp_decode_select_expr(data, p, key);
 			// }
 		}
-		if (pPrior != NULL)
+		if (pPrior != NULL) {
 			pPrior->pPrior = p;
+			p->pNext = pPrior;
+		}
 		pPrior = p;
 	}
 	return pSelect;
