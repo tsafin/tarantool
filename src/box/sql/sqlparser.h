@@ -60,6 +60,14 @@ luaT_check_sql_stmt(struct lua_State *L, int idx);
 void
 luaT_push_sql_stmt(struct lua_State *L, struct sql_stmt *stmt);
 
+int
+sql_stmt_parse(const char *zSql, struct sql_stmt **ppStmt, struct sql_parsed_ast *ast);
+
+int
+sql_parser_ast_execute(struct lua_State *L,
+		       struct sql_parsed_ast *ast,
+		       struct sql_stmt *stmt);
+
 #if defined(__cplusplus)
 }
 #endif
