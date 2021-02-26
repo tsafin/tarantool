@@ -4,6 +4,7 @@
 #include "sqlInt.h"
 #include "sqlparser.h"
 #include "box/box.h"
+#include <small/ibuf.h>
 
 #ifndef DISABLE_AST_CACHING
 #include "box/sql_stmt_cache.h"
@@ -198,6 +199,30 @@ lbox_sqlparser_execute(struct lua_State *L)
 		return 1;
 };
 
+int
+lbox_sqlparser_serialize(struct lua_State *L)
+{
+	struct sql_parsed_ast *ast = luaT_check_sql_parsed_ast(L, 1);
+
+	if (AST_VALID(ast)) {
+		assert(ast->ast_type == AST_TYPE_SELECT);
+
+		struct ibuf ibuf;
+		ibuf_create(&ibuf, &cord()->slabc, 1024); // FIXME - precise estimate
+		ibuf_reset(&ibuf);
+
+		struct Parse parser;
+		struct sql *db = sql_get();
+		sql_parser_create(&parser, db, default_flags);
+		sqlparser_generate_msgpack_walker(&parser, &ibuf, ast->select);
+
+		lua_pushlstring(L, ibuf.buf, ibuf_used(&ibuf));
+		ibuf_reinit(&ibuf);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
 
 extern char sql_ast_cdef[];
 

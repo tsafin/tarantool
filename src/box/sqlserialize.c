@@ -2,12 +2,12 @@
 #include "execute.h"
 #include "lua/utils.h"
 #include "sqlInt.h"
-#include "../sql/vdbe.h"	// FIXME
-#include "../sql/vdbeInt.h"	// FIXME
-#include "../execute.h"		// FIXME
-#include "../schema.h"		// FIXME
-#include "../session.h"		// FIXME
-#include "../box.h"		// FIXME
+#include "sql/vdbe.h"
+#include "sql/vdbeInt.h"
+#include "execute.h"
+#include "schema.h"
+#include "session.h"
+#include "box.h"
 #include <small/ibuf.h>
 #include <msgpuck/msgpuck.h>
 
@@ -448,7 +448,7 @@ return_error:
 	return rc & WRC_Abort;
 }
 
-static void
+void
 sqlparser_generate_msgpack_walker(struct Parse *parser,
 				  struct ibuf *ibuf,
 				  struct Select *p) 
@@ -470,31 +470,3 @@ sqlparser_generate_msgpack_walker(struct Parse *parser,
 
 }
 
-int
-lbox_sqlparser_serialize(struct lua_State *L)
-{
-	int top = lua_gettop(L);
-	assert(top == 1);
-	(void)top;
-
-	struct sql_parsed_ast *ast = luaT_check_sql_parsed_ast(L, 1);
-
-	if (AST_VALID(ast)) {
-		assert(ast->ast_type == AST_TYPE_SELECT);
-
-		struct ibuf ibuf;
-		ibuf_create(&ibuf, &cord()->slabc, 1024); // FIXME - precise estimate
-		ibuf_reset(&ibuf);
-
-		struct Parse parser;
-		struct sql *db = sql_get();
-		sql_parser_create(&parser, db, default_flags);
-		sqlparser_generate_msgpack_walker(&parser, &ibuf, ast->select);
-
-		lua_pushlstring(L, ibuf.buf, ibuf_used(&ibuf));
-		ibuf_reinit(&ibuf);
-	} else {
-		lua_pushnil(L);
-	}
-	return 1;
-}

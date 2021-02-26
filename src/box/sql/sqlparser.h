@@ -30,6 +30,7 @@
  * SUCH DAMAGE.
  */
 #include <stdbool.h>
+#include <stdint.h>
 
 #if defined(__cplusplus)
 extern "C" {
@@ -38,6 +39,9 @@ extern "C" {
 struct lua_State;
 struct sql_parsed_ast;
 struct sql_stmt;
+struct Select;
+struct ibuf;
+struct Parse;
 
 void
 box_lua_sqlparser_init(struct lua_State *L);
@@ -67,6 +71,14 @@ int
 sql_parser_ast_execute(struct lua_State *L,
 		       struct sql_parsed_ast *ast,
 		       struct sql_stmt *stmt);
+
+void
+sqlparser_generate_msgpack_walker(struct Parse *parser,
+				  struct ibuf *ibuf,
+				  struct Select *p);
+
+// to avoid session.h inclusion
+extern uint32_t default_flags;
 
 #if defined(__cplusplus)
 }
