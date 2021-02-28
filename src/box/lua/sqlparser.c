@@ -224,6 +224,21 @@ lbox_sqlparser_serialize(struct lua_State *L)
 	return 1;
 }
 
+int
+lbox_sqlparser_deserialize(struct lua_State *L)
+{
+	int index = lua_gettop(L);
+	int type = index >= 1 ? lua_type(L, 1) : LUA_TNONE;
+	switch (type) {
+	case LUA_TSTRING:
+		return sqlparser_msgpack_decode_string(L, true);
+	default:
+		return luaL_error(L, "sqldeserialize: "
+				  "a Lua string or 'char *' expected");
+	}
+	return 1;
+}
+
 extern char sql_ast_cdef[];
 
 void

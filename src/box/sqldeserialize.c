@@ -2,12 +2,12 @@
 #include "execute.h"
 #include "lua/utils.h"
 #include "sqlInt.h"
-#include "../sql/vdbe.h"	// FIXME
-#include "../sql/vdbeInt.h"	// FIXME
-#include "../execute.h"		// FIXME
-#include "../schema.h"		// FIXME
-#include "../session.h"		// FIXME
-#include "../box.h"		// FIXME
+#include "sql/vdbe.h"
+#include "sql/vdbeInt.h"
+#include "execute.h"
+#include "schema.h"
+#include "session.h"
+#include "box.h"
 #include <small/ibuf.h>
 #include <msgpuck/msgpuck.h>
 
@@ -28,9 +28,6 @@ mp_decode_select_from(const char **data);
 
 static struct ExprList *
 mp_decode_expr_list(const char **data);
-
-void
-luaT_push_sql_parsed_ast(struct lua_State *L, struct sql_parsed_ast *ast);
 
 struct span_view {
 	const char * ptr;
@@ -447,7 +444,7 @@ mp_decode_select(const char **data, bool subselect)
 	return pSelect;
 }
 
-static int
+int
 sqlparser_msgpack_decode_string(struct lua_State *L, bool check)
 {
 	size_t data_len;
@@ -474,17 +471,3 @@ sqlparser_msgpack_decode_string(struct lua_State *L, bool check)
 	}
 }
 
-int
-lbox_sqlparser_deserialize(struct lua_State *L)
-{
-	int index = lua_gettop(L);
-	int type = index >= 1 ? lua_type(L, 1) : LUA_TNONE;
-	switch (type) {
-	case LUA_TSTRING:
-		return sqlparser_msgpack_decode_string(L, true);
-	default:
-		return luaL_error(L, "sqldeserialize: "
-				  "a Lua string or 'char *' expected");
-	}
-	return 1;
-}

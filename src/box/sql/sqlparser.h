@@ -77,6 +77,9 @@ sqlparser_generate_msgpack_walker(struct Parse *parser,
 				  struct ibuf *ibuf,
 				  struct Select *p);
 
+int
+sqlparser_msgpack_decode_string(struct lua_State *L, bool check);
+
 // to avoid session.h inclusion
 extern uint32_t default_flags;
 
