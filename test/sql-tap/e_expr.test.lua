@@ -36,15 +36,28 @@ local function do_qexpr_test(tn, expr, value)
         {value })
 end
 
-local function matchfunc(a, b)
+--[[ local function matchfunc(a, b)
     return (a == b)
 end
 
 local function regexfunc(a, b)
     return (a == b)
 end
-box.internal.sql_create_function("MATCH", "INT", matchfunc)
-box.internal.sql_create_function("REGEXP", "INT", regexfunc)
+]]
+
+local function sql_create_function(name, code, return_v)
+    box.schema.func.create(name,
+    {
+        language = 'lua',
+        body = code,
+        returns = return_v,
+        exports = {'LUA', 'SQL'},
+    })
+end
+
+sql_create_function("MATCH", [[ function (a, b) return (a == b) end ]], 'boolean')
+
+sql_create_function("REGEXP", [[ function (a, b) return (a == b) end ]], 'boolean')
 
 -- Set up three global variables:
 --
