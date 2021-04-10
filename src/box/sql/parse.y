@@ -1187,10 +1187,8 @@ expr(A) ::= id(X) LP distinct(D) exprlist(Y) RP(E). {
   }
 }
 
-/*
- * type_func(A) ::= DATE(A) .
- * type_func(A) ::= DATETIME(A) .
- */
+type_func(A) ::= DATE(A) .
+type_func(A) ::= DATETIME(A) .
 type_func(A) ::= CHAR(A) .
 expr(A) ::= type_func(X) LP distinct(D) exprlist(Y) RP(E). {
   if( Y && Y->nExpr>pParse->db->aLimit[SQL_LIMIT_FUNCTION_ARG] ){
@@ -1211,12 +1209,11 @@ expr(A) ::= id(X) LP STAR RP(E). {
   A.pExpr = sqlExprFunction(pParse, 0, &X);
   spanSet(&A,&X,&E);
 }
-/*
- * term(A) ::= CTIME_KW(OP). {
- *   A.pExpr = sqlExprFunction(pParse, 0, &OP);
- *   spanSet(&A, &OP, &OP);
- * }
- */
+
+term(A) ::= CTIME_KW(OP). {
+  A.pExpr = sqlExprFunction(pParse, 0, &OP);
+  spanSet(&A, &OP, &OP);
+}
 
 %include {
   /* This routine constructs a binary expression node out of two ExprSpan
