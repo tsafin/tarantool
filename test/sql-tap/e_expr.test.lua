@@ -208,79 +208,53 @@ test:do_test(
     "e_expr-1.1",
     function()
         return untested
-    end, {
-        -- <e_expr-1.1>
-
-        -- </e_expr-1.1>
-    })
+    end,
+    {}
+)
 
 -- At one point, test 1.2.2 was failing. Instead of the correct result, it
 -- was returning {1 1 0}. This would seem to indicate that LIKE has the
 -- same precedence as '<'. Which is incorrect. It has lower precedence.
 --
 test:do_execsql_test(
-    "e_expr-1.2.1",
-    [[
-        SELECT 0 < 2 LIKE 1,   (0 < 2) LIKE 1,   0 < (2 LIKE 1)
-    ]], {
-        -- <e_expr-1.2.1>
-        1, 1, 0
-        -- </e_expr-1.2.1>
-    })
+    "e_expr-1.2.1", 
+    [[ SELECT 0 < 2 LIKE 1,   (0 < 2) LIKE 1,   0 < (2 LIKE 1) ]],
+    {1, 1, 0}
+)
 
 test:do_execsql_test(
     "e_expr-1.2.2",
-    [[
-        SELECT 0 LIKE 0 < 2,   (0 LIKE 0) < 2,   0 LIKE (0 < 2)
-    ]], {
-        -- <e_expr-1.2.2>
-        0, 1, 0
-        -- </e_expr-1.2.2>
-    })
+    [[ SELECT 0 LIKE 0 < 2,   (0 LIKE 0) < 2,   0 LIKE (0 < 2) ]],
+    {0, 1, 0}
+)
 
 -- Showing that LIKE and == have the same precedence
 --
 test:do_execsql_test(
     "e_expr-1.2.3",
-    [[
-        SELECT 2 LIKE 2 == 1,   (2 LIKE 2) == 1,    2 LIKE (2 == 1)
-    ]], {
-        -- <e_expr-1.2.3>
-        1, 1, 0
-        -- </e_expr-1.2.3>
-    })
+    [[ SELECT 2 LIKE 2 == 1,   (2 LIKE 2) == 1,    2 LIKE (2 == 1) ]],
+    {1, 1, 0}
+)
 
 test:do_execsql_test(
     "e_expr-1.2.4",
-    [[
-        SELECT 2 == 2 LIKE 1,   (2 == 2) LIKE 1,    2 == (2 LIKE 1)
-    ]], {
-        -- <e_expr-1.2.4>
-        1, 1, 0
-        -- </e_expr-1.2.4>
-    })
+    [[ SELECT 2 == 2 LIKE 1,   (2 == 2) LIKE 1,    2 == (2 LIKE 1) ]],
+    {1, 1, 0}
+)
 
 -- Showing that < groups more tightly than == (< has higher precedence).
 --
 test:do_execsql_test(
     "e_expr-1.2.5",
-    [[
-        SELECT 0 < 2 == 1,   (0 < 2) == 1,   0 < (2 == 1)
-    ]], {
-        -- <e_expr-1.2.5>
-        1, 1, 0
-        -- </e_expr-1.2.5>
-    })
+    [[ SELECT 0 < 2 == 1,   (0 < 2) == 1,   0 < (2 == 1) ]],
+    {1, 1, 0}
+)
 
 test:do_execsql_test(
     "e_expr-1.6",
-    [[
-        SELECT 0 == 0 < 2,   (0 == 0) < 2,   0 == (0 < 2)
-    ]], {
-        -- <e_expr-1.6>
-        0, 1, 0
-        -- </e_expr-1.6>
-    })
+    [[ SELECT 0 == 0 < 2,   (0 == 0) < 2,   0 == (0 < 2) ]],
+    {0, 1, 0}
+)
 
 ---------------------------------------------------------------------------
 -- Check that the four unary prefix operators mentioned in the
@@ -289,45 +263,13 @@ test:do_execsql_test(
 -- EVIDENCE-OF: R-13958-53419 Supported unary prefix operators are these:
 -- - + ~ NOT
 --
-test:do_execsql_test(
-    "e_expr-2.1",
-    [[
-        SELECT -   10
-    ]], {
-        -- <e_expr-2.1>
-        -10
-        -- </e_expr-2.1>
-    })
+test:do_execsql_test("e_expr-2.1", [[ SELECT - 10 ]], {-10})
 
-test:do_execsql_test(
-    "e_expr-2.2",
-    [[
-        SELECT +   10
-    ]], {
-        -- <e_expr-2.2>
-        10
-        -- </e_expr-2.2>
-    })
+test:do_execsql_test("e_expr-2.2", [[ SELECT + 10 ]], {10})
 
-test:do_execsql_test(
-    "e_expr-2.3",
-    [[
-        SELECT ~   10
-    ]], {
-        -- <e_expr-2.3>
-        -11
-        -- </e_expr-2.3>
-    })
+test:do_execsql_test("e_expr-2.3", [[ SELECT ~ 10 ]], {-11})
 
-test:do_execsql_test(
-    "e_expr-2.4",
-    [[
-        SELECT NOT 10
-    ]], {
-        -- <e_expr-2.4>
-        0
-        -- </e_expr-2.4>
-    })
+test:do_execsql_test("e_expr-2.4", [[ SELECT NOT 10 ]], {0})
 
 ---------------------------------------------------------------------------
 -- Tests for the two statements made regarding the unary + operator.
@@ -353,9 +295,9 @@ for _, val in ipairs(literals) do
     local sql = string.format(" SELECT quote( + %s ), typeof( + %s) ", literal, literal)
     test:do_execsql_test(
         "e_expr-3."..tn,
-        sql, {
-            literal, type
-        })
+        sql,
+        { literal, type }
+    )
 
 end
 ---------------------------------------------------------------------------
@@ -377,19 +319,26 @@ for _, val in ipairs(literals) do
     local tn = val[1]
     local literal = val[2]
     local different = val[3]
+
     test:do_execsql_test(
         "e_expr-4."..tn,
-        string.format([[
-            SELECT %s  = %s,   %s == %s,
-                   %s  = %s, %s == %s,
-                   %s  = NULL,       %s == NULL,
-                   %s != %s,   %s <> %s,
-                   %s != %s, %s <> %s,
-                   %s != NULL,       %s != NULL
+        string.format([[ SELECT 
+                    %s  = %s, %s == %s,
+                    %s  = %s, %s == %s,
+                    %s  = NULL,       %s == NULL,
+                    %s != %s,   %s <> %s,
+                    %s != %s, %s <> %s,
+                    %s != NULL,       %s != NULL
 
-        ]], literal, literal, literal, literal, literal, different, literal, different, literal, literal, literal, literal, literal, literal, literal, different, literal, different, literal, literal), {
-            1, 1, 0, 0, "", "", 0, 0, 1, 1, "", ""
-        })
+        ]],
+        literal, literal, literal, literal,
+        literal, different, literal, different,
+        literal, literal,
+        literal, literal, literal, literal,
+        literal, different, literal, different,
+        literal, literal),
+        { 1, 1, 0, 0, "", "", 0, 0, 1, 1, "", "" }
+    )
 
 end
 ---------------------------------------------------------------------------
@@ -410,11 +359,9 @@ for _, val in ipairs(test_cases5) do
     local bs = test:execsql("SELECT "..b.."")[1]
     test:do_execsql_test(
         "e_expr-5."..tn,
-        string.format([[
-            SELECT %s || %s
-        ]], a, b), {
-            string.format("%s%s", as, bs)
-        })
+        string.format([[ SELECT %s || %s ]], a, b),
+        { string.format("%s%s", as, bs) }
+    )
 
 end
 ---------------------------------------------------------------------------
@@ -423,45 +370,13 @@ end
 -- EVIDENCE-OF: R-08914-63790 The operator % outputs the value of its
 -- left operand modulo its right operand.
 --
-test:do_execsql_test(
-    "e_expr-6.1",
-    [[
-        SELECT  72%5
-    ]], {
-        -- <e_expr-6.1>
-        2
-        -- </e_expr-6.1>
-    })
+test:do_execsql_test("e_expr-6.1", [[ SELECT  72%5 ]], {2})
 
-test:do_execsql_test(
-    "e_expr-6.2",
-    [[
-        SELECT  72%-5
-    ]], {
-        -- <e_expr-6.2>
-        2
-        -- </e_expr-6.2>
-    })
+test:do_execsql_test("e_expr-6.2", [[ SELECT  72%-5 ]], {2})
 
-test:do_execsql_test(
-    "e_expr-6.3",
-    [[
-        SELECT -72%-5
-    ]], {
-        -- <e_expr-6.3>
-        -2
-        -- </e_expr-6.3>
-    })
+test:do_execsql_test("e_expr-6.3", [[ SELECT -72%-5]], {-2})
 
-test:do_execsql_test(
-    "e_expr-6.4",
-    [[
-        SELECT -72%5
-    ]], {
-        -- <e_expr-6.4>
-        -2
-        -- </e_expr-6.4>
-    })
+test:do_execsql_test("e_expr-6.4", [[ SELECT -72%5 ]], {-2})
 
 ---------------------------------------------------------------------------
 -- Test that the results of all binary operators are either numeric or
@@ -493,7 +408,9 @@ for _, op in ipairs(oplist) do
                                 ((op ~= "||") and (((t == "integer") or
                                 (t == "real")) or
                                 (t == "null")))) and 1 or 0
-                end, 1)
+                    end,
+                    1
+                )
             end
 
         end
@@ -516,125 +433,29 @@ end
 -- EVIDENCE-OF: R-61975-13410 It is not possible for an IS or IS NOT
 -- expression to evaluate to NULL.
 --
-test:do_execsql_test(
-    "e_expr-8.1.1",
-    [[
-        SELECT NULL IS     NULL
-    ]], {
-        -- <e_expr-8.1.1>
-        1
-        -- </e_expr-8.1.1>
-    })
+test:do_execsql_test("e_expr-8.1.1", [[ SELECT NULL IS NULL ]], {1})
 
-test:do_execsql_test(
-    "e_expr-8.1.2",
-    [[
-        SELECT 'ab' IS     NULL
-    ]], {
-        -- <e_expr-8.1.2>
-        0
-        -- </e_expr-8.1.2>
-    })
+test:do_execsql_test("e_expr-8.1.2", [[ SELECT 'ab' IS NULL ]], {0})
 
-test:do_execsql_test(
-    "e_expr-8.1.3",
-    [[
-        SELECT NULL ==     NULL
-    ]], {
-        -- <e_expr-8.1.5>
-        ""
-        -- </e_expr-8.1.5>
-    })
+test:do_execsql_test("e_expr-8.1.3", [[ SELECT NULL == NULL ]], {""})
 
-test:do_execsql_test(
-    "e_expr-8.1.4",
-    [[
-        SELECT 'ab' ==     NULL
-    ]], {
-        -- <e_expr-8.1.6>
-        ""
-        -- </e_expr-8.1.6>
-    })
+test:do_execsql_test("e_expr-8.1.4", [[ SELECT 'ab' == NULL ]], {""})
 
-test:do_execsql_test(
-    "e_expr-8.1.5",
-    [[
-        SELECT NULL ==     'ab'
-    ]], {
-        -- <e_expr-8.1.7>
-        ""
-        -- </e_expr-8.1.7>
-    })
+test:do_execsql_test("e_expr-8.1.5", [[ SELECT NULL == 'ab' ]], {""})
 
-test:do_execsql_test(
-    "e_expr-8.1.6",
-    [[
-        SELECT 'ab' ==     'ab'
-    ]], {
-        -- <e_expr-8.1.8>
-        1
-        -- </e_expr-8.1.8>
-    })
+test:do_execsql_test("e_expr-8.1.6", [[ SELECT 'ab' == 'ab' ]], {1})
 
-test:do_execsql_test(
-    "e_expr-8.1.7",
-    [[
-        SELECT NULL IS NOT NULL
-    ]], {
-        -- <e_expr-8.1.9>
-        0
-        -- </e_expr-8.1.9>
-    })
+test:do_execsql_test("e_expr-8.1.7", [[ SELECT NULL IS NOT NULL ]], {0})
 
-test:do_execsql_test(
-    "e_expr-8.1.8",
-    [[
-        SELECT 'ab' IS NOT NULL
-    ]], {
-        -- <e_expr-8.1.10>
-        1
-        -- </e_expr-8.1.10>
-    })
+test:do_execsql_test("e_expr-8.1.8", [[ SELECT 'ab' IS NOT NULL ]], {1})
 
-test:do_execsql_test(
-    "e_expr-8.1.9",
-    [[
-        SELECT NULL !=     NULL
-    ]], {
-        -- <e_expr-8.1.13>
-        ""
-        -- </e_expr-8.1.13>
-    })
+test:do_execsql_test("e_expr-8.1.9", [[ SELECT NULL != NULL ]], {""})
 
-test:do_execsql_test(
-    "e_expr-8.1.10",
-    [[
-        SELECT 'ab' !=     NULL
-    ]], {
-        -- <e_expr-8.1.14>
-        ""
-        -- </e_expr-8.1.14>
-    })
+test:do_execsql_test("e_expr-8.1.10", [[ SELECT 'ab' != NULL ]], {""})
 
-test:do_execsql_test(
-    "e_expr-8.1.11",
-    [[
-        SELECT NULL !=     'ab'
-    ]], {
-        -- <e_expr-8.1.15>
-        ""
-        -- </e_expr-8.1.15>
-    })
+test:do_execsql_test("e_expr-8.1.11", [[ SELECT NULL != 'ab' ]], {""})
 
-test:do_execsql_test(
-    "e_expr-8.1.12",
-    [[
-        SELECT 'ab' !=     'ab'
-    ]], {
-        -- <e_expr-8.1.16>
-        0
-        -- </e_expr-8.1.16>
-    })
+test:do_execsql_test("e_expr-8.1.12", [[ SELECT 'ab' != 'ab' ]], {0})
 
 ---------------------------------------------------------------------------
 -- Run some tests on the COLLATE "unary postfix operator".
@@ -669,184 +490,81 @@ box.internal.sql_create_function("REVERSE", "INT", reverse_collate)
 -- MUST_WORK_TEST waiting for collations?
 if (0>0) then
     test:do_execsql_test(
-        "e_expr-9.1",
-        [[
-            SELECT  'abcd' < 'bbbb'    COLLATE reverse
-        ]], {
-            -- <e_expr-9.1>
-            0
-            -- </e_expr-9.1>
-        })
+        "e_expr-9.1", [[ SELECT 'abcd' < 'bbbb' COLLATE reverse ]], {0}
+    )
 
     test:do_execsql_test(
-        "e_expr-9.2",
-        [[
-            SELECT ('abcd' < 'bbbb')   COLLATE reverse
-        ]], {
-            -- <e_expr-9.2>
-            1
-            -- </e_expr-9.2>
-        })
+        "e_expr-9.2", [[ SELECT ('abcd' < 'bbbb') COLLATE reverse ]], {1}
+    )
 
     test:do_execsql_test(
-        "e_expr-9.3",
-        [[
-            SELECT  'abcd' <= 'bbbb'   COLLATE reverse
-        ]], {
-            -- <e_expr-9.3>
-            0
-            -- </e_expr-9.3>
-        })
+        "e_expr-9.3", [[ SELECT 'abcd' <= 'bbbb' COLLATE reverse ]], {0}
+    )
 
     test:do_execsql_test(
-        "e_expr-9.4",
-        [[
-            SELECT ('abcd' <= 'bbbb')  COLLATE reverse
-        ]], {
-            -- <e_expr-9.4>
-            1
-            -- </e_expr-9.4>
-        })
+        "e_expr-9.4", [[ SELECT ('abcd' <= 'bbbb')  COLLATE reverse ]], {1}
+    )
 
     test:do_execsql_test(
-        "e_expr-9.5",
-        [[
-            SELECT  'abcd' > 'bbbb'    COLLATE reverse
-        ]], {
-            -- <e_expr-9.5>
-            1
-            -- </e_expr-9.5>
-        })
+        "e_expr-9.5", [[ SELECT 'abcd' > 'bbbb' COLLATE reverse ]], {1}
+    )
 
     test:do_execsql_test(
-        "e_expr-9.6",
-        [[
-            SELECT ('abcd' > 'bbbb')   COLLATE reverse
-        ]], {
-            -- <e_expr-9.6>
-            0
-            -- </e_expr-9.6>
-        })
+        "e_expr-9.6", [[ SELECT ('abcd' > 'bbbb') COLLATE reverse ]], {0}
+    )
 
     test:do_execsql_test(
-        "e_expr-9.7",
-        [[
-            SELECT  'abcd' >= 'bbbb'   COLLATE reverse
-        ]], {
-            -- <e_expr-9.7>
-            1
-            -- </e_expr-9.7>
-        })
+        "e_expr-9.7", [[ SELECT 'abcd' >= 'bbbb' COLLATE reverse ]], {1}
+    )
 
     test:do_execsql_test(
-        "e_expr-9.8",
-        [[
-            SELECT ('abcd' >= 'bbbb')  COLLATE reverse
-        ]], {
-            -- <e_expr-9.8>
-            0
-            -- </e_expr-9.8>
-        })
+        "e_expr-9.8", [[ SELECT ('abcd' >= 'bbbb') COLLATE reverse ]], {0}
+    )
 end
-test:do_execsql_test(
-    "e_expr-9.10",
-    [[
-        SELECT  'abcd' =  'ABCD'  COLLATE "unicode_ci"
-    ]], {
-        -- <e_expr-9.10>
-        1
-        -- </e_expr-9.10>
-    })
 
 test:do_execsql_test(
-    "e_expr-9.11",
-    [[
-        SELECT ('abcd' =  'ABCD') COLLATE "unicode_ci"
-    ]], {
-        -- <e_expr-9.11>
-        0
-        -- </e_expr-9.11>
-    })
+    "e_expr-9.10", [[ SELECT 'abcd' = 'ABCD' COLLATE "unicode_ci" ]], {1}
+)
 
 test:do_execsql_test(
-    "e_expr-9.12",
-    [[
-        SELECT  'abcd' == 'ABCD'  COLLATE "unicode_ci"
-    ]], {
-        -- <e_expr-9.12>
-        1
-        -- </e_expr-9.12>
-    })
+    "e_expr-9.11", [[ SELECT ('abcd' = 'ABCD') COLLATE "unicode_ci" ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-9.13",
-    [[
-        SELECT ('abcd' == 'ABCD') COLLATE "unicode_ci"
-    ]], {
-        -- <e_expr-9.13>
-        0
-        -- </e_expr-9.13>
-    })
+    "e_expr-9.12", [[ SELECT 'abcd' == 'ABCD' COLLATE "unicode_ci" ]], {1}
+)
 
 test:do_execsql_test(
-    "e_expr-9.14",
-    [[
-        SELECT  'abcd' != 'ABCD'      COLLATE "unicode_ci"
-    ]], {
-        -- <e_expr-9.16>
-        0
-        -- </e_expr-9.16>
-    })
+    "e_expr-9.13", [[ SELECT ('abcd' == 'ABCD') COLLATE "unicode_ci" ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-9.15",
-    [[
-        SELECT ('abcd' != 'ABCD')     COLLATE "unicode_ci"
-    ]], {
-        -- <e_expr-9.17>
-        1
-        -- </e_expr-9.17>
-    })
+    "e_expr-9.14", [[ SELECT 'abcd' != 'ABCD' COLLATE "unicode_ci" ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-9.16",
-    [[
-        SELECT  'abcd' <> 'ABCD'      COLLATE "unicode_ci"
-    ]], {
-        -- <e_expr-9.18>
-        0
-        -- </e_expr-9.18>
-    })
+    "e_expr-9.15", [[ SELECT ('abcd' != 'ABCD') COLLATE "unicode_ci" ]], {1}
+)
 
 test:do_execsql_test(
-    "e_expr-9.17",
-    [[
-        SELECT ('abcd' <> 'ABCD')     COLLATE "unicode_ci"
-    ]], {
-        -- <e_expr-9.19>
-        1
-        -- </e_expr-9.19>
-    })
+    "e_expr-9.16", [[ SELECT 'abcd' <> 'ABCD' COLLATE "unicode_ci" ]], {0}
+)
+
+test:do_execsql_test(
+    "e_expr-9.17", [[ SELECT ('abcd' <> 'ABCD') COLLATE "unicode_ci" ]], {1}
+)
 
 test:do_execsql_test(
     "e_expr-9.19",
-    [[
-        SELECT 'bbb' BETWEEN 'AAA' AND 'CCC' COLLATE "unicode_ci"
-    ]], {
-        -- <e_expr-9.22>
-        1
-        -- </e_expr-9.22>
-    })
+    [[ SELECT 'bbb' BETWEEN 'AAA' AND 'CCC' COLLATE "unicode_ci"]],
+    {1}
+)
 
 test:do_execsql_test(
     "e_expr-9.20",
-    [[
-        SELECT ('bbb' BETWEEN 'AAA' AND 'CCC') COLLATE "unicode_ci"
-    ]], {
-        -- <e_expr-9.23>
-        0
-        -- </e_expr-9.23>
-    })
+    [[ SELECT ('bbb' BETWEEN 'AAA' AND 'CCC') COLLATE "unicode_ci" ]],
+    {0}
+)
 
 -- # EVIDENCE-OF: R-58731-25439 The collating sequence set by the COLLATE
 -- # operator overrides the collating sequence determined by the COLLATE
@@ -857,108 +575,36 @@ test:do_execsql_test(
 --   INSERT INTO t24 VALUES('aaa', 1);
 --   INSERT INTO t24 VALUES('bbb', 2);
 --   INSERT INTO t24 VALUES('ccc', 3);
--- } {}
--- do_execsql_test e_expr-9.25 { SELECT 'BBB' = a FROM t24 } {0 1 0}
--- do_execsql_test e_expr-9.25 { SELECT a = 'BBB' FROM t24 } {0 1 0}
--- do_execsql_test e_expr-9.25 { SELECT 'BBB' = a COLLATE binary FROM t24 } {0 0 0}
--- do_execsql_test e_expr-9.25 { SELECT a COLLATE binary = 'BBB' FROM t24 } {0 0 0}
+--} {}
+-- do_execsql_test e_expr-9.25 {SELECT 'BBB' = a FROM t24} {0 1 0}
+-- do_execsql_test e_expr-9.25 {SELECT a = 'BBB' FROM t24} {0 1 0}
+-- do_execsql_test e_expr-9.25 {SELECT 'BBB' = a COLLATE binary FROM t24} {0 0 0}
+-- do_execsql_test e_expr-9.25 {SELECT a COLLATE binary = 'BBB' FROM t24} {0 0 0}
 ---------------------------------------------------------------------------
 -- Test statements related to literal values.
 --
 -- EVIDENCE-OF: R-31536-32008 Literal values may be integers, floating
 -- point numbers, strings, BLOBs, or NULLs.
 --
-test:do_execsql_test(
-    "e_expr-10.1.1",
-    [[
-        SELECT typeof(5)
-    ]], {
-        -- <e_expr-10.1.1>
-        "integer"
-        -- </e_expr-10.1.1>
-    })
+test:do_execsql_test("e_expr-10.1.1", [[ SELECT typeof(5) ]], {"integer"})
 
-test:do_execsql_test(
-    "e_expr-10.1.2",
-    [[
-        SELECT typeof(5.1)
-    ]], {
-        -- <e_expr-10.1.2>
-        "real"
-        -- </e_expr-10.1.2>
-    })
+test:do_execsql_test("e_expr-10.1.2", [[ SELECT typeof(5.1) ]], {"real"})
 
-test:do_execsql_test(
-    "e_expr-10.1.3",
-    [[
-        SELECT typeof('5.1')
-    ]], {
-        -- <e_expr-10.1.3>
-        "text"
-        -- </e_expr-10.1.3>
-    })
+test:do_execsql_test("e_expr-10.1.3", [[ SELECT typeof('5.1') ]], {"text"})
 
-test:do_execsql_test(
-    "e_expr-10.1.4",
-    [[
-        SELECT typeof(X'ABCD')
-    ]], {
-        -- <e_expr-10.1.4>
-        "blob"
-        -- </e_expr-10.1.4>
-    })
+test:do_execsql_test("e_expr-10.1.4", [[ SELECT typeof(X'ABCD') ]], {"blob"})
 
-test:do_execsql_test(
-    "e_expr-10.1.5",
-    [[
-        SELECT typeof(NULL)
-    ]], {
-        -- <e_expr-10.1.5>
-        "null"
-        -- </e_expr-10.1.5>
-    })
+test:do_execsql_test("e_expr-10.1.5", [[ SELECT typeof(NULL) ]], {"null"})
 
 -- "Scientific notation is supported for point literal values."
 --
-test:do_execsql_test(
-    "e_expr-10.2.1",
-    [[
-        SELECT typeof(3.4e-02)
-    ]], {
-        -- <e_expr-10.2.1>
-        "real"
-        -- </e_expr-10.2.1>
-    })
+test:do_execsql_test("e_expr-10.2.1", [[ SELECT typeof(3.4e-02) ]], {"real"})
 
-test:do_execsql_test(
-    "e_expr-10.2.2",
-    [[
-        SELECT typeof(3e+5)
-    ]], {
-        -- <e_expr-10.2.2>
-        "real"
-        -- </e_expr-10.2.2>
-    })
+test:do_execsql_test("e_expr-10.2.2", [[ SELECT typeof(3e+5) ]], {"real"})
 
-test:do_execsql_test(
-    "e_expr-10.2.3",
-    [[
-        SELECT 3.4e-02
-    ]], {
-        -- <e_expr-10.2.3>
-        0.034
-        -- </e_expr-10.2.3>
-    })
+test:do_execsql_test("e_expr-10.2.3", [[ SELECT 3.4e-02 ]], {0.034})
 
-test:do_execsql_test(
-    "e_expr-10.2.4",
-    [[
-        SELECT 3e+4
-    ]], {
-        -- <e_expr-10.2.4>
-        30000.0
-        -- </e_expr-10.2.4>
-    })
+test:do_execsql_test("e_expr-10.2.4", [[ SELECT 3e+4 ]], {30000.0})
 
 -- EVIDENCE-OF: R-35229-17830 A string constant is formed by enclosing
 -- the string in single quotes (').
@@ -966,45 +612,13 @@ test:do_execsql_test(
 -- EVIDENCE-OF: R-07100-06606 A single quote within the string can be
 -- encoded by putting two single quotes in a row - as in Pascal.
 --
-test:do_execsql_test(
-    "e_expr-10.3.1",
-    [[
-        SELECT 'is not'
-    ]], {
-        -- <e_expr-10.3.1>
-        "is not"
-        -- </e_expr-10.3.1>
-    })
+test:do_execsql_test("e_expr-10.3.1", [[ SELECT 'is not' ]], {"is not"})
 
-test:do_execsql_test(
-    "e_expr-10.3.2",
-    [[
-        SELECT typeof('is not')
-    ]], {
-        -- <e_expr-10.3.2>
-        "text"
-        -- </e_expr-10.3.2>
-    })
+test:do_execsql_test("e_expr-10.3.2", [[ SELECT typeof('is not') ]], {"text"})
 
-test:do_execsql_test(
-    "e_expr-10.3.3",
-    [[
-        SELECT 'isn''t'
-    ]], {
-        -- <e_expr-10.3.3>
-        "isn't"
-        -- </e_expr-10.3.3>
-    })
+test:do_execsql_test("e_expr-10.3.3", [[ SELECT 'isn''t' ]], {"isn't"})
 
-test:do_execsql_test(
-    "e_expr-10.3.4",
-    [[
-        SELECT typeof('isn''t')
-    ]], {
-        -- <e_expr-10.3.4>
-        "text"
-        -- </e_expr-10.3.4>
-    })
+test:do_execsql_test("e_expr-10.3.4", [[ SELECT typeof('isn''t') ]], {"text"})
 
 -- EVIDENCE-OF: R-09593-03321 BLOB literals are string literals
 -- containing hexadecimal data and preceded by a single "x" or "X"
@@ -1013,77 +627,31 @@ test:do_execsql_test(
 -- EVIDENCE-OF: R-19836-11244 Example: X'53514C697465'
 --
 test:do_execsql_test(
-    "e_expr-10.4.1",
-    [[
-        SELECT typeof(X'0123456789ABCDEF')
-    ]], {
-        -- <e_expr-10.4.1>
-        "blob"
-        -- </e_expr-10.4.1>
-    })
+    "e_expr-10.4.1", [[ SELECT typeof(X'0123456789ABCDEF') ]], {"blob"}
+)
 
 test:do_execsql_test(
-    "e_expr-10.4.2",
-    [[
-        SELECT typeof(x'0123456789ABCDEF')
-    ]], {
-        -- <e_expr-10.4.2>
-        "blob"
-        -- </e_expr-10.4.2>
-    })
+    "e_expr-10.4.2", [[ SELECT typeof(x'0123456789ABCDEF') ]], {"blob"}
+)
 
 test:do_execsql_test(
-    "e_expr-10.4.3",
-    [[
-        SELECT typeof(X'0123456789abcdef')
-    ]], {
-        -- <e_expr-10.4.3>
-        "blob"
-        -- </e_expr-10.4.3>
-    })
+    "e_expr-10.4.3", [[ SELECT typeof(X'0123456789abcdef') ]], {"blob"}
+)
 
 test:do_execsql_test(
-    "e_expr-10.4.4",
-    [[
-        SELECT typeof(x'0123456789abcdef')
-    ]], {
-        -- <e_expr-10.4.4>
-        "blob"
-        -- </e_expr-10.4.4>
-    })
+    "e_expr-10.4.4", [[ SELECT typeof(x'0123456789abcdef') ]], {"blob"}
+)
 
 test:do_execsql_test(
-    "e_expr-10.4.5",
-    [[
-        SELECT typeof(X'53514C697465')
-    ]], {
-        -- <e_expr-10.4.5>
-        "blob"
-        -- </e_expr-10.4.5>
-    })
+    "e_expr-10.4.5", [[ SELECT typeof(X'53514C697465') ]], {"blob"}
+)
 
 -- EVIDENCE-OF: R-23914-51476 A literal value can also be the token
 -- "NULL".
 --
-test:do_execsql_test(
-    "e_expr-10.5.1",
-    [[
-        SELECT NULL
-    ]], {
-        -- <e_expr-10.5.1>
-        ""
-        -- </e_expr-10.5.1>
-    })
+test:do_execsql_test("e_expr-10.5.1", [[ SELECT NULL ]], {""})
 
-test:do_execsql_test(
-    "e_expr-10.5.2",
-    [[
-        SELECT typeof(NULL)
-    ]], {
-        -- <e_expr-10.5.2>
-        "null"
-        -- </e_expr-10.5.2>
-    })
+test:do_execsql_test("e_expr-10.5.2", [[ SELECT typeof(NULL) ]], {"null"})
 
 ---------------------------------------------------------------------------
 -- Test statements related to bound parameters
@@ -1109,7 +677,7 @@ if (0>0) then
         local sql_column_text = nil
         local sql_step = nil
         sql_step(stmt)
-        local res = {  }
+        local res = {}
         for i in X(0, "X!for", [=[["set i 0","$i < [sql_column_count $stmt]","incr i"]]=]) do
             table.insert(res,sql_column_text(stmt, i))
         end
@@ -1132,9 +700,7 @@ if (0>0) then
     parameter_test("e_expr-11.2.2", "SELECT :123", "1 :123", -1)
     parameter_test("e_expr-11.2.3", "SELECT :__", "1 :__", -1)
     parameter_test("e_expr-11.2.4", "SELECT :_$_", "1 :_$_", -1)
-    parameter_test("e_expr-11.2.5", [[
-      SELECT :เอศขูเอล
-    ]], "1 :เอศขูเอล", -1)
+    parameter_test("e_expr-11.2.5", [[ SELECT :เอศขูเอล ]], "1 :เอศขูเอล", -1)
     parameter_test("e_expr-11.2.6", "SELECT :", "1 :", -1)
     -- EVIDENCE-OF: R-49783-61279 An "at" sign works exactly like a colon,
     -- except that the name of the parameter created is @AAAA.
@@ -1143,9 +709,7 @@ if (0>0) then
     parameter_test("e_expr-11.3.2", "SELECT @123", "1 @123", -1)
     parameter_test("e_expr-11.3.3", "SELECT @__", "1 @__", -1)
     parameter_test("e_expr-11.3.4", "SELECT @_$_", "1 @_$_", -1)
-    parameter_test("e_expr-11.3.5", [[
-      SELECT @เอศขูเอล
-    ]], "1 @เอศขูเอล", -1)
+    parameter_test("e_expr-11.3.5", [[ SELECT @เอศขูเอล ]], "1 @เอศขูเอล", -1)
     parameter_test("e_expr-11.3.6", "SELECT @", "1 @", -1)
     -- EVIDENCE-OF: R-14068-49671 Parameters that are not assigned values
     -- using sql_bind() are treated as NULL.
@@ -1155,150 +719,63 @@ if (0>0) then
     local sql_prepare_v2 = nil
     local sql_column_type = nil
     local sql_step = nil
+
     test:do_test(
         "e_expr-11.7.1",
         function()
             local stmt = sql_prepare_v2(" SELECT ?, :a, @b, ?d ", -1)
             sql_step(stmt)
-            return { sql_column_type(stmt, 0), sql_column_type(stmt, 1), sql_column_type(stmt, 2), sql_column_type(stmt, 3) }
-        end, {
-            -- <e_expr-11.7.1>
-            "NULL", "NULL", "NULL", "NULL"
-            -- </e_expr-11.7.1>
-        })
+            return {sql_column_type(stmt, 0), sql_column_type(stmt, 1), sql_column_type(stmt, 2), sql_column_type(stmt, 3)}
+        end,
+        {"NULL", "NULL", "NULL", "NULL"}
+    )
 
     -- Legacy from the original code. Must be replaced with analogue
     -- functions from box.
     local stmt = nil
-    test:do_sql_finalize_test(
-        "e_expr-11.7.1",
-        stmt, {
-            -- <e_expr-11.7.1>
-            "sql_OK"
-            -- </e_expr-11.7.1>
-        })
+    test:do_sql_finalize_test("e_expr-11.7.1", stmt, {"sql_OK"})
 end
 ---------------------------------------------------------------------------
 -- "Test" the syntax diagrams in lang_expr.html.
 --
 -- -- syntax diagram signed-number
 --
-test:do_execsql_test(
-    "e_expr-12.1.1",
-    [[
-        SELECT 0, +0, -0
-    ]], {
-        -- <e_expr-12.1.1>
-        0, 0, 0
-        -- </e_expr-12.1.1>
-    })
+test:do_execsql_test("e_expr-12.1.1", [[ SELECT 0, +0, -0 ]], {0, 0, 0})
+
+test:do_execsql_test("e_expr-12.1.2", [[ SELECT 1, +1, -1 ]], {1, 1, -1})
+
+test:do_execsql_test("e_expr-12.1.3", [[ SELECT 2, +2, -2 ]], {2, 2, -2})
 
 test:do_execsql_test(
-    "e_expr-12.1.2",
-    [[
-        SELECT 1, +1, -1
-    ]], {
-        -- <e_expr-12.1.2>
-        1, 1, -1
-        -- </e_expr-12.1.2>
-    })
-
-test:do_execsql_test(
-    "e_expr-12.1.3",
-    [[
-        SELECT 2, +2, -2
-    ]], {
-        -- <e_expr-12.1.3>
-        2, 2, -2
-        -- </e_expr-12.1.3>
-    })
-
-test:do_execsql_test(
-    "e_expr-12.1.4",
-    [[
-        SELECT 1.4, +1.4, -1.4
-    ]], {
-        -- <e_expr-12.1.4>
-        1.4, 1.4, -1.4
-        -- </e_expr-12.1.4>
-    })
+    "e_expr-12.1.4", [[ SELECT 1.4, +1.4, -1.4 ]], {1.4, 1.4, -1.4}
+)
 
 test:do_execsql_test(
     "e_expr-12.1.5",
-    [[
-        SELECT 1.5e+5, +1.5e+5, -1.5e+5
-    ]], {
-        -- <e_expr-12.1.5>
-        150000.0, 150000.0, -150000.0
-        -- </e_expr-12.1.5>
-    })
+    [[ SELECT 1.5e+5, +1.5e+5, -1.5e+5 ]],
+    {150000.0, 150000.0, -150000.0}
+)
 
 test:do_execsql_test(
     "e_expr-12.1.6",
-    [[
-        SELECT 0.0001, +0.0001, -0.0001
-    ]], {
-        -- <e_expr-12.1.6>
-        0.0001, 0.0001, -0.0001
-        -- </e_expr-12.1.6>
-    })
-
+    [[ SELECT 0.0001, +0.0001, -0.0001 ]],
+    {0.0001, 0.0001, -0.0001}
+)
 -- -- syntax diagram literal-value
 --
 
-test:do_execsql_test(
-    "e_expr-12.2.1",
-    [[
-        SELECT 123
-    ]], {
-        -- <e_expr-12.2.1>
-        123
-        -- </e_expr-12.2.1>
-    })
+test:do_execsql_test("e_expr-12.2.1", [[ SELECT 123 ]], {123})
 
-test:do_execsql_test(
-    "e_expr-12.2.2",
-    [[
-        SELECT 123.4e05
-    ]], {
-        -- <e_expr-12.2.2>
-        12340000.0
-        -- </e_expr-12.2.2>
-    })
+test:do_execsql_test("e_expr-12.2.2", [[ SELECT 123.4e05 ]], {12340000.0})
 
-test:do_execsql_test(
-    "e_expr-12.2.3",
-    [[
-        SELECT 'abcde'
-    ]], {
-        -- <e_expr-12.2.3>
-        "abcde"
-        -- </e_expr-12.2.3>
-    })
+test:do_execsql_test("e_expr-12.2.3", [[ SELECT 'abcde' ]], {"abcde"})
 
-test:do_execsql_test(
-    "e_expr-12.2.4",
-    [[
-        SELECT X'414243'
-    ]], {
-        -- <e_expr-12.2.4>
-        "ABC"
-        -- </e_expr-12.2.4>
-    })
+test:do_execsql_test("e_expr-12.2.4", [[ SELECT X'414243' ]], {"ABC"})
 
-test:do_execsql_test(
-    "e_expr-12.2.5",
-    [[
-        SELECT NULL
-    ]], {
-        -- <e_expr-12.2.5>
-        ""
-        -- </e_expr-12.2.5>
-    })
+test:do_execsql_test("e_expr-12.2.5", [[ SELECT NULL ]], {""})
 
-test:execsql [[
-    CREATE TABLE tblname(cname INT PRIMARY KEY);
-]]
+test:execsql [[ CREATE TABLE tblname(cname INT PRIMARY KEY); ]]
+
 local function glob()
     return 1
 end
@@ -1420,7 +897,7 @@ for _, val in ipairs(test_cases12) do
         table.insert(elist, result)
     end
     if string.find(expr, "EXPR") then
-        local elist2 = {  }
+        local elist2 = {}
         for _, el in ipairs(elist) do
             for _, e in ipairs({"cname", "34+22"}) do
                 local result = string.gsub(el, "EXPR", e)
@@ -1440,7 +917,9 @@ for _, val in ipairs(test_cases12) do
                 end)
                 return rc
                 --return set("rc", X(712, "X!cmd", [=[["catch"," execsql \"SELECT $e FROM tblname\" ","msg"]]=]))
-            end, true)
+            end,
+            true
+        )
 
     end
 end
@@ -1478,10 +957,10 @@ for _, val in ipairs(test_cases13) do
         function()
             xcount = 0
             local a = test:execsql("SELECT "..expr.."")[1]
-            return { xcount, a }
-        end, {
-            nEval, res
-        })
+            return {xcount, a}
+        end,
+        {nEval, res}
+    )
 
 end
 -- EVIDENCE-OF: R-05155-34454 The precedence of the BETWEEN operator is
@@ -1492,304 +971,124 @@ end
 -- so than "<".
 --
 test:do_execsql_test(
-    "e_expr-13.2.1",
-    [[
-        SELECT 1 == 10 BETWEEN 0 AND 2
-    ]], {
-        -- <e_expr-13.2.1>
-        1
-        -- </e_expr-13.2.1>
-    })
+    "e_expr-13.2.1", [[ SELECT 1 == 10 BETWEEN 0 AND 2 ]], {1}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.2",
-    [[
-        SELECT (1 == 10) BETWEEN 0 AND 2
-    ]], {
-        -- <e_expr-13.2.2>
-        1
-        -- </e_expr-13.2.2>
-    })
+    "e_expr-13.2.2", [[ SELECT (1 == 10) BETWEEN 0 AND 2 ]], {1}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.3",
-    [[
-        SELECT 1 == (10 BETWEEN 0 AND 2)
-    ]], {
-        -- <e_expr-13.2.3>
-        0
-        -- </e_expr-13.2.3>
-    })
+    "e_expr-13.2.3", [[ SELECT 1 == (10 BETWEEN 0 AND 2) ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.4",
-    [[
-        SELECT  6 BETWEEN 4 AND 8 == 1
-    ]], {
-        -- <e_expr-13.2.4>
-        1
-        -- </e_expr-13.2.4>
-    })
+    "e_expr-13.2.4", [[ SELECT 6 BETWEEN 4 AND 8 == 1 ]], {1}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.5",
-    [[
-        SELECT (6 BETWEEN 4 AND 8) == 1
-    ]], {
-        -- <e_expr-13.2.5>
-        1
-        -- </e_expr-13.2.5>
-    })
+    "e_expr-13.2.5", [[ SELECT (6 BETWEEN 4 AND 8) == 1 ]], {1}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.6",
-    [[
-        SELECT  6 BETWEEN 4 AND (8 == 1)
-    ]], {
-        -- <e_expr-13.2.6>
-        0
-        -- </e_expr-13.2.6>
-    })
+    "e_expr-13.2.6", [[ SELECT 6 BETWEEN 4 AND (8 == 1) ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.7",
-    [[
-        SELECT  5 BETWEEN 0 AND 0  != 1
-    ]], {
-        -- <e_expr-13.2.7>
-        1
-        -- </e_expr-13.2.7>
-    })
+    "e_expr-13.2.7", [[ SELECT  5 BETWEEN 0 AND 0  != 1 ]], {1}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.8",
-    [[
-        SELECT (5 BETWEEN 0 AND 0) != 1
-    ]], {
-        -- <e_expr-13.2.8>
-        1
-        -- </e_expr-13.2.8>
-    })
+    "e_expr-13.2.8", [[ SELECT (5 BETWEEN 0 AND 0) != 1 ]], {1}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.9",
-    [[
-        SELECT  5 BETWEEN 0 AND (0 != 1)
-    ]], {
-        -- <e_expr-13.2.9>
-        0
-        -- </e_expr-13.2.9>
-    })
+    "e_expr-13.2.9", [[ SELECT 5 BETWEEN 0 AND (0 != 1) ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.10",
-    [[
-        SELECT  1 != 0  BETWEEN 0 AND 2
-    ]], {
-        -- <e_expr-13.2.10>
-        1
-        -- </e_expr-13.2.10>
-    })
+    "e_expr-13.2.10", [[ SELECT 1 != 0  BETWEEN 0 AND 2 ]], {1}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.11",
-    [[
-        SELECT (1 != 0) BETWEEN 0 AND 2
-    ]], {
-        -- <e_expr-13.2.11>
-        1
-        -- </e_expr-13.2.11>
-    })
+    "e_expr-13.2.11", [[ SELECT (1 != 0) BETWEEN 0 AND 2 ]], {1}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.12",
-    [[
-        SELECT  1 != (0 BETWEEN 0 AND 2)
-    ]], {
-        -- <e_expr-13.2.12>
-        0
-        -- </e_expr-13.2.12>
-    })
+    "e_expr-13.2.12", [[ SELECT 1 != (0 BETWEEN 0 AND 2) ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.13",
-    [[
-        SELECT 1 LIKE 10 BETWEEN 0 AND 2
-    ]], {
-        -- <e_expr-13.2.13>
-        1
-        -- </e_expr-13.2.13>
-    })
+    "e_expr-13.2.13", [[ SELECT 1 LIKE 10 BETWEEN 0 AND 2 ]], {1}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.14",
-    [[
-        SELECT (1 LIKE 10) BETWEEN 0 AND 2
-    ]], {
-        -- <e_expr-13.2.14>
-        1
-        -- </e_expr-13.2.14>
-    })
+    "e_expr-13.2.14", [[ SELECT (1 LIKE 10) BETWEEN 0 AND 2 ]], {1}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.15",
-    [[
-        SELECT 1 LIKE (10 BETWEEN 0 AND 2)
-    ]], {
-        -- <e_expr-13.2.15>
-        0
-        -- </e_expr-13.2.15>
-    })
+    "e_expr-13.2.15", [[ SELECT 1 LIKE (10 BETWEEN 0 AND 2) ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.16",
-    [[
-        SELECT  6 BETWEEN 4 AND 8 LIKE 1
-    ]], {
-        -- <e_expr-13.2.16>
-        1
-        -- </e_expr-13.2.16>
-    })
+    "e_expr-13.2.16", [[ SELECT  6 BETWEEN 4 AND 8 LIKE 1 ]], {1}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.17",
-    [[
-        SELECT (6 BETWEEN 4 AND 8) LIKE 1
-    ]], {
-        -- <e_expr-13.2.17>
-        1
-        -- </e_expr-13.2.17>
-    })
+    "e_expr-13.2.17", [[ SELECT (6 BETWEEN 4 AND 8) LIKE 1 ]], {1}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.18",
-    [[
-        SELECT  6 BETWEEN 4 AND (8 LIKE 1)
-    ]], {
-        -- <e_expr-13.2.18>
-        0
-        -- </e_expr-13.2.18>
-    })
+    "e_expr-13.2.18", [[ SELECT 6 BETWEEN 4 AND (8 LIKE 1) ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.19",
-    [[
-        SELECT 0 AND 0 BETWEEN 0 AND 1
-    ]], {
-        -- <e_expr-13.2.19>
-        0
-        -- </e_expr-13.2.19>
-    })
+    "e_expr-13.2.19", [[ SELECT 0 AND 0 BETWEEN 0 AND 1 ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.20",
-    [[
-        SELECT 0 AND (0 BETWEEN 0 AND 1)
-    ]], {
-        -- <e_expr-13.2.20>
-        0
-        -- </e_expr-13.2.20>
-    })
+    "e_expr-13.2.20", [[ SELECT 0 AND (0 BETWEEN 0 AND 1) ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.21",
-    [[
-        SELECT (0 AND 0) BETWEEN 0 AND 1
-    ]], {
-        -- <e_expr-13.2.21>
-        1
-        -- </e_expr-13.2.21>
-    })
+    "e_expr-13.2.21", [[ SELECT (0 AND 0) BETWEEN 0 AND 1 ]], {1}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.22",
-    [[
-        SELECT 0 BETWEEN -1 AND 1 AND 0
-    ]], {
-        -- <e_expr-13.2.22>
-        0
-        -- </e_expr-13.2.22>
-    })
+    "e_expr-13.2.22", [[ SELECT 0 BETWEEN -1 AND 1 AND 0 ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.23",
-    [[
-        SELECT (0 BETWEEN -1 AND 1) AND 0
-    ]], {
-        -- <e_expr-13.2.23>
-        0
-        -- </e_expr-13.2.23>
-    })
+    "e_expr-13.2.23", [[ SELECT (0 BETWEEN -1 AND 1) AND 0 ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.24",
-    [[
-        SELECT 0 BETWEEN -1 AND (1 AND 0)
-    ]], {
-        -- <e_expr-13.2.24>
-        1
-        -- </e_expr-13.2.24>
-    })
+    "e_expr-13.2.24", [[ SELECT 0 BETWEEN -1 AND (1 AND 0) ]], {1}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.25",
-    [[
-        SELECT 2 < 3 BETWEEN 0 AND 1
-    ]], {
-        -- <e_expr-13.2.25>
-        1
-        -- </e_expr-13.2.25>
-    })
+    "e_expr-13.2.25", [[ SELECT 2 < 3 BETWEEN 0 AND 1 ]], {1}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.26",
-    [[
-        SELECT (2 < 3) BETWEEN 0 AND 1
-    ]], {
-        -- <e_expr-13.2.26>
-        1
-        -- </e_expr-13.2.26>
-    })
+    "e_expr-13.2.26", [[ SELECT (2 < 3) BETWEEN 0 AND 1 ]], {1}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.27",
-    [[
-        SELECT 2 < (3 BETWEEN 0 AND 1)
-    ]], {
-        -- <e_expr-13.2.27>
-        0
-        -- </e_expr-13.2.27>
-    })
+    "e_expr-13.2.27", [[ SELECT 2 < (3 BETWEEN 0 AND 1) ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.28",
-    [[
-        SELECT 2 BETWEEN 1 AND 2 < 3
-    ]], {
-        -- <e_expr-13.2.28>
-        0
-        -- </e_expr-13.2.28>
-    })
+    "e_expr-13.2.28", [[ SELECT 2 BETWEEN 1 AND 2 < 3 ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.29",
-    [[
-        SELECT 2 BETWEEN 1 AND (2 < 3)
-    ]], {
-        -- <e_expr-13.2.29>
-        0
-        -- </e_expr-13.2.29>
-    })
+    "e_expr-13.2.29", [[ SELECT 2 BETWEEN 1 AND (2 < 3) ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-13.2.30",
-    [[
-        SELECT (2 BETWEEN 1 AND 2) < 3
-    ]], {
-        -- <e_expr-13.2.30>
-        1
-        -- </e_expr-13.2.30>
-    })
+    "e_expr-13.2.30", [[ SELECT (2 BETWEEN 1 AND 2) < 3 ]], {1}
+)
 
 ---------------------------------------------------------------------------
 -- Test the statements related to the LIKE operator.
@@ -1801,124 +1100,36 @@ test:do_execsql_test(
 -- operator contains the pattern and the left hand operand contains the
 -- string to match against the pattern.
 --
-test:do_execsql_test(
-    "e_expr-14.1.1",
-    [[
-        SELECT 'abc%' LIKE 'abcde'
-    ]], {
-        -- <e_expr-14.1.1>
-        0
-        -- </e_expr-14.1.1>
-    })
+test:do_execsql_test("e_expr-14.1.1", [[ SELECT 'abc%' LIKE 'abcde' ]], {0})
 
-test:do_execsql_test(
-    "e_expr-14.1.2",
-    [[
-        SELECT 'abcde' LIKE 'abc%'
-    ]], {
-        -- <e_expr-14.1.2>
-        1
-        -- </e_expr-14.1.2>
-    })
+test:do_execsql_test("e_expr-14.1.2", [[ SELECT 'abcde' LIKE 'abc%' ]], {1})
 
 -- EVIDENCE-OF: R-55406-38524 A percent symbol ("%") in the LIKE pattern
 -- matches any sequence of zero or more characters in the string.
 --
-test:do_execsql_test(
-    "e_expr-14.2.1",
-    [[
-        SELECT 'abde'    LIKE 'ab%de'
-    ]], {
-        -- <e_expr-14.2.1>
-        1
-        -- </e_expr-14.2.1>
-    })
+test:do_execsql_test("e_expr-14.2.1", [[ SELECT 'abde' LIKE 'ab%de' ]], {1})
 
-test:do_execsql_test(
-    "e_expr-14.2.2",
-    [[
-        SELECT 'abXde'   LIKE 'ab%de'
-    ]], {
-        -- <e_expr-14.2.2>
-        1
-        -- </e_expr-14.2.2>
-    })
+test:do_execsql_test("e_expr-14.2.2", [[ SELECT 'abXde' LIKE 'ab%de' ]], {1})
 
-test:do_execsql_test(
-    "e_expr-14.2.3",
-    [[
-        SELECT 'abABCde' LIKE 'ab%de'
-    ]], {
-        -- <e_expr-14.2.3>
-        1
-        -- </e_expr-14.2.3>
-    })
+test:do_execsql_test("e_expr-14.2.3", [[ SELECT 'abABCde' LIKE 'ab%de' ]], {1})
 
 -- EVIDENCE-OF: R-30433-25443 An underscore ("_") in the LIKE pattern
 -- matches any single character in the string.
 --
-test:do_execsql_test(
-    "e_expr-14.3.1",
-    [[
-        SELECT 'abde'    LIKE 'ab_de'
-    ]], {
-        -- <e_expr-14.3.1>
-        0
-        -- </e_expr-14.3.1>
-    })
+test:do_execsql_test("e_expr-14.3.1", [[ SELECT 'abde' LIKE 'ab_de' ]], {0})
 
-test:do_execsql_test(
-    "e_expr-14.3.2",
-    [[
-        SELECT 'abXde'   LIKE 'ab_de'
-    ]], {
-        -- <e_expr-14.3.2>
-        1
-        -- </e_expr-14.3.2>
-    })
+test:do_execsql_test("e_expr-14.3.2", [[ SELECT 'abXde' LIKE 'ab_de' ]], {1})
 
-test:do_execsql_test(
-    "e_expr-14.3.3",
-    [[
-        SELECT 'abABCde' LIKE 'ab_de'
-    ]], {
-        -- <e_expr-14.3.3>
-        0
-        -- </e_expr-14.3.3>
-    })
+test:do_execsql_test("e_expr-14.3.3", [[ SELECT 'abABCde' LIKE 'ab_de' ]], {0})
 
 -- EVIDENCE-OF: R-59007-20454 Any other character matches itself or its
 -- lower/upper case equivalent (i.e. case-insensitive matching).
 --
-test:do_execsql_test(
-    "e_expr-14.4.1",
-    [[
-        SELECT 'abc' LIKE 'aBc'
-    ]], {
-        -- <e_expr-14.4.1>
-        1
-        -- </e_expr-14.4.1>
-    })
+test:do_execsql_test("e_expr-14.4.1", [[ SELECT 'abc' LIKE 'aBc' ]], {1})
 
-test:do_execsql_test(
-    "e_expr-14.4.2",
-    [[
-        SELECT 'aBc' LIKE 'aBc'
-    ]], {
-        -- <e_expr-14.4.2>
-        1
-        -- </e_expr-14.4.2>
-    })
+test:do_execsql_test("e_expr-14.4.2", [[ SELECT 'aBc' LIKE 'aBc' ]], {1})
 
-test:do_execsql_test(
-    "e_expr-14.4.3",
-    [[
-        SELECT 'ac'  LIKE 'aBc'
-    ]], {
-        -- <e_expr-14.4.3>
-        0
-        -- </e_expr-14.4.3>
-    })
+test:do_execsql_test("e_expr-14.4.3", [[ SELECT 'ac'  LIKE 'aBc' ]], {0})
 
 -- EVIDENCE-OF: R-23648-58527 sql only understands upper/lower case
 -- for ASCII characters by default.
@@ -1934,15 +1145,7 @@ test:do_execsql_test(
 --   library is compiled in. When ICU is enabled sql does not act
 --   as it does "by default".
 --
-test:do_execsql_test(
-    "e_expr-14.5.1",
-    [[
-        SELECT 'A' LIKE 'a'
-    ]], {
-        -- <e_expr-14.5.1>
-        1
-        -- </e_expr-14.5.1>
-    })
+test:do_execsql_test("e_expr-14.5.1", [[ SELECT 'A' LIKE 'a' ]], {1})
 
 
 
@@ -1952,55 +1155,39 @@ test:do_execsql_test(
 --
 test:do_catchsql_test(
     "e_expr-14.6.1",
-    [[
-        SELECT 'A' LIKE 'a' ESCAPE '12'
-    ]], {
-        -- <e_expr-14.6.1>
-        1, "ESCAPE expression must be a single character"
-        -- </e_expr-14.6.1>
-    })
+    [[ SELECT 'A' LIKE 'a' ESCAPE '12' ]],
+    {1, "ESCAPE expression must be a single character"}
+)
 
 test:do_catchsql_test(
     "e_expr-14.6.2",
-    [[
-        SELECT 'A' LIKE 'a' ESCAPE ''
-    ]], {
-        -- <e_expr-14.6.2>
-        1, "ESCAPE expression must be a single character"
-        -- </e_expr-14.6.2>
-    })
+    [[ SELECT 'A' LIKE 'a' ESCAPE '' ]],
+    {1, "ESCAPE expression must be a single character"}
+)
 
 test:do_catchsql_test(
     "e_expr-14.6.3",
-    "SELECT 'A' LIKE 'a' ESCAPE 'x' ", {
-        -- <e_expr-14.6.3>
-        0, {1}
-        -- </e_expr-14.6.3>
-    })
+    "SELECT 'A' LIKE 'a' ESCAPE 'x' ",
+    {0, {1}}
+)
 
 test:do_catchsql_test(
     "e_expr-14.6.4",
-    "SELECT 'A' LIKE 'a' ESCAPE 'æ'", {
-        -- <e_expr-14.6.4>
-        0, {1}
-        -- </e_expr-14.6.4>
-    })
+    "SELECT 'A' LIKE 'a' ESCAPE 'æ'",
+    {0, {1}}
+)
 
 test:do_catchsql_test(
     "e_expr-14.6.5",
-    "SELECT 'ab%' LIKE 'abё%' ESCAPE 'ё';", {
-        -- <e_expr-14.6.5>
-        0, {1}
-        -- </e_expr-14.6.5>
-    })
+    "SELECT 'ab%' LIKE 'abё%' ESCAPE 'ё';",
+    {0, {1}}
+)
 
 test:do_catchsql_test(
     "e_expr-14.6.6",
-    "SELECT 'abc' LIKE 'abё%' ESCAPE 'ё';", {
-        -- <e_expr-14.6.6>
-        0, {0}
-        -- </e_expr-14.6.6>
-})
+    "SELECT 'abc' LIKE 'abё%' ESCAPE 'ё';",
+    {0, {0}}
+)
 
 -- EVIDENCE-OF: R-02045-23762 This character may be used in the LIKE
 -- pattern to include literal percent or underscore characters.
@@ -2011,144 +1198,50 @@ test:do_catchsql_test(
 -- single escape character, respectively.
 --
 test:do_execsql_test(
-    "e_expr-14.7.1",
-    [[
-        SELECT 'abc%'  LIKE 'abcX%' ESCAPE 'X'
-    ]], {
-        -- <e_expr-14.7.1>
-        1
-        -- </e_expr-14.7.1>
-    })
+    "e_expr-14.7.1", [[ SELECT 'abc%' LIKE 'abcX%' ESCAPE 'X' ]], {1}
+)
 
 test:do_execsql_test(
-    "e_expr-14.7.2",
-    [[
-        SELECT 'abc5'  LIKE 'abcX%' ESCAPE 'X'
-    ]], {
-        -- <e_expr-14.7.2>
-        0
-        -- </e_expr-14.7.2>
-    })
+    "e_expr-14.7.2", [[ SELECT 'abc5' LIKE 'abcX%' ESCAPE 'X' ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-14.7.3",
-    [[
-        SELECT 'abc'   LIKE 'abcX%' ESCAPE 'X'
-    ]], {
-        -- <e_expr-14.7.3>
-        0
-        -- </e_expr-14.7.3>
-    })
+    "e_expr-14.7.3", [[ SELECT 'abc' LIKE 'abcX%' ESCAPE 'X' ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-14.7.4",
-    [[
-        SELECT 'abcX%' LIKE 'abcX%' ESCAPE 'X'
-    ]], {
-        -- <e_expr-14.7.4>
-        0
-        -- </e_expr-14.7.4>
-    })
+    "e_expr-14.7.4", [[ SELECT 'abcX%' LIKE 'abcX%' ESCAPE 'X' ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-14.7.5",
-    [[
-        SELECT 'abc%%' LIKE 'abcX%' ESCAPE 'X'
-    ]], {
-        -- <e_expr-14.7.5>
-        0
-        -- </e_expr-14.7.5>
-    })
+    "e_expr-14.7.5", [[ SELECT 'abc%%' LIKE 'abcX%' ESCAPE 'X' ]], {0})
 
 test:do_execsql_test(
-    "e_expr-14.7.6",
-    [[
-        SELECT 'abc_'  LIKE 'abcX_' ESCAPE 'X'
-    ]], {
-        -- <e_expr-14.7.6>
-        1
-        -- </e_expr-14.7.6>
-    })
+    "e_expr-14.7.6", [[ SELECT 'abc_'  LIKE 'abcX_' ESCAPE 'X' ]], {1})
 
 test:do_execsql_test(
-    "e_expr-14.7.7",
-    [[
-        SELECT 'abc5'  LIKE 'abcX_' ESCAPE 'X'
-    ]], {
-        -- <e_expr-14.7.7>
-        0
-        -- </e_expr-14.7.7>
-    })
+    "e_expr-14.7.7", [[ SELECT 'abc5'  LIKE 'abcX_' ESCAPE 'X' ]], {0})
 
 test:do_execsql_test(
-    "e_expr-14.7.8",
-    [[
-        SELECT 'abc'   LIKE 'abcX_' ESCAPE 'X'
-    ]], {
-        -- <e_expr-14.7.8>
-        0
-        -- </e_expr-14.7.8>
-    })
+    "e_expr-14.7.8", [[ SELECT 'abc'   LIKE 'abcX_' ESCAPE 'X' ]], {0})
 
 test:do_execsql_test(
-    "e_expr-14.7.9",
-    [[
-        SELECT 'abcX_' LIKE 'abcX_' ESCAPE 'X'
-    ]], {
-        -- <e_expr-14.7.9>
-        0
-        -- </e_expr-14.7.9>
-    })
+    "e_expr-14.7.9", [[ SELECT 'abcX_' LIKE 'abcX_' ESCAPE 'X' ]], {0})
 
 test:do_execsql_test(
-    "e_expr-14.7.10",
-    [[
-        SELECT 'abc__' LIKE 'abcX_' ESCAPE 'X'
-    ]], {
-        -- <e_expr-14.7.10>
-        0
-        -- </e_expr-14.7.10>
-    })
+    "e_expr-14.7.10", [[ SELECT 'abc__' LIKE 'abcX_' ESCAPE 'X' ]], {0})
 
 test:do_execsql_test(
-    "e_expr-14.7.11",
-    [[
-        SELECT 'abcX'  LIKE 'abcXX' ESCAPE 'X'
-    ]], {
-        -- <e_expr-14.7.11>
-        1
-        -- </e_expr-14.7.11>
-    })
+    "e_expr-14.7.11", [[ SELECT 'abcX'  LIKE 'abcXX' ESCAPE 'X' ]], {1})
 
 test:do_execsql_test(
-    "e_expr-14.7.12",
-    [[
-        SELECT 'abc5'  LIKE 'abcXX' ESCAPE 'X'
-    ]], {
-        -- <e_expr-14.7.12>
-        0
-        -- </e_expr-14.7.12>
-    })
+    "e_expr-14.7.12", [[ SELECT 'abc5'  LIKE 'abcXX' ESCAPE 'X' ]], {0})
 
 test:do_execsql_test(
-    "e_expr-14.7.13",
-    [[
-        SELECT 'abc'   LIKE 'abcXX' ESCAPE 'X'
-    ]], {
-        -- <e_expr-14.7.13>
-        0
-        -- </e_expr-14.7.13>
-    })
+    "e_expr-14.7.13", [[ SELECT 'abc'   LIKE 'abcXX' ESCAPE 'X' ]], {0})
 
 test:do_execsql_test(
-    "e_expr-14.7.14",
-    [[
-        SELECT 'abcXX' LIKE 'abcXX' ESCAPE 'X'
-    ]], {
-        -- <e_expr-14.7.14>
-        0
-        -- </e_expr-14.7.14>
-    })
+    "e_expr-14.7.14", [[ SELECT 'abcXX' LIKE 'abcXX' ESCAPE 'X' ]], {0})
 
 -- EVIDENCE-OF: R-51359-17496 The infix LIKE operator is implemented by
 -- calling the application-defined SQL functions like(Y,X) or like(Y,X,Z).
@@ -2165,164 +1258,77 @@ end
 box.internal.sql_create_function("LIKE", "INT", likefunc)
 --db("func", "like", "-argcount", 2, "likefunc")
 --db("func", "like", "-argcount", 3, "likefunc")
-test:do_execsql_test(
-    "e_expr-15.1.1",
-    [[
-        SELECT 'abc' LIKE 'def'
-    ]], {
-        -- <e_expr-15.1.1>
-        1
-        -- </e_expr-15.1.1>
-    })
+test:do_execsql_test("e_expr-15.1.1", [[ SELECT 'abc' LIKE 'def' ]], {1})
 
 test:do_test(
     "e_expr-15.1.2",
     function()
         return likeargs
-    end, {
-        -- <e_expr-15.1.2>
-        "def", "abc"
-        -- </e_expr-15.1.2>
-    })
+    end,
+    {"def", "abc"}
+)
 
-likeargs = {  }
+likeargs = {}
 test:do_execsql_test(
-    "e_expr-15.1.3",
-    [[
-        SELECT 'abc' LIKE 'def' ESCAPE 'X'
-    ]], {
-        -- <e_expr-15.1.3>
-        1
-        -- </e_expr-15.1.3>
-    })
+    "e_expr-15.1.3", [[ SELECT 'abc' LIKE 'def' ESCAPE 'X' ]], {1}
+)
 
 test:do_test(
     "e_expr-15.1.4",
     function()
         return likeargs
-    end, {
-        -- <e_expr-15.1.4>
-        "def", "abc", "X"
-        -- </e_expr-15.1.4>
-    })
+    end,
+    {"def", "abc", "X"}
+)
 -- EVIDENCE-OF: R-22868-25880 The LIKE operator can be made case
 -- sensitive using the case_sensitive_like pragma.
 --
 test:do_execsql_test(
-    "e_expr-16.1.1",
-    [[
-        SELECT 'abcxyz' LIKE 'ABC%'
-    ]], {
-        -- <e_expr-16.1.1>
-        1
-        -- </e_expr-16.1.1>
-    })
+    "e_expr-16.1.1", [[ SELECT 'abcxyz' LIKE 'ABC%' ]], {1}
+)
+
+test:do_execsql_test("e_expr-16.1.2", [[ PRAGMA case_sensitive_like = 1 ]], {})
 
 test:do_execsql_test(
-    "e_expr-16.1.2",
-    [[
-        PRAGMA case_sensitive_like = 1
-    ]], {
-        -- <e_expr-16.1.2>
-
-        -- </e_expr-16.1.2>
-    })
+    "e_expr-16.1.3", [[ SELECT 'abcxyz' LIKE 'ABC%' ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-16.1.3",
-    [[
-        SELECT 'abcxyz' LIKE 'ABC%'
-    ]], {
-        -- <e_expr-16.1.3>
-        0
-        -- </e_expr-16.1.3>
-    })
+    "e_expr-16.1.4", [[ SELECT 'ABCxyz' LIKE 'ABC%' ]], {1}
+)
+
+test:do_execsql_test("e_expr-16.1.5", [[ PRAGMA case_sensitive_like = 0 ]], {})
 
 test:do_execsql_test(
-    "e_expr-16.1.4",
-    [[
-        SELECT 'ABCxyz' LIKE 'ABC%'
-    ]], {
-        -- <e_expr-16.1.4>
-        1
-        -- </e_expr-16.1.4>
-    })
+    "e_expr-16.1.6", [[ SELECT 'abcxyz' LIKE 'ABC%' ]], {1}
+)
 
 test:do_execsql_test(
-    "e_expr-16.1.5",
-    [[
-        PRAGMA case_sensitive_like = 0
-    ]], {
-        -- <e_expr-16.1.5>
-
-        -- </e_expr-16.1.5>
-    })
-
-test:do_execsql_test(
-    "e_expr-16.1.6",
-    [[
-        SELECT 'abcxyz' LIKE 'ABC%'
-    ]], {
-        -- <e_expr-16.1.6>
-        1
-        -- </e_expr-16.1.6>
-    })
-
-test:do_execsql_test(
-    "e_expr-16.1.7",
-    [[
-        SELECT 'ABCxyz' LIKE 'ABC%'
-    ]], {
-        -- <e_expr-16.1.7>
-        1
-        -- </e_expr-16.1.7>
-    })
+    "e_expr-16.1.7", [[ SELECT 'ABCxyz' LIKE 'ABC%' ]], {1}
+)
 
 -- EVIDENCE-OF: R-39616-20555 LIKE may be preceded by the
 -- NOT keyword to invert the sense of the test.
 --
 test:do_execsql_test(
     "e_expr-17.2.0",
-    [[
-        PRAGMA case_sensitive_like = 1;
-        SELECT 'abcxyz' NOT LIKE 'ABC%';
-    ]], {
-        -- <e_expr-17.2.0>
-        1
-        -- </e_expr-17.2.0>
-    })
+    [[  PRAGMA case_sensitive_like = 1; SELECT 'abcxyz' NOT LIKE 'ABC%'; ]],
+    {1}
+)
 
 test:execsql("PRAGMA case_sensitive_like = 0;")
 
 test:do_execsql_test(
-    "e_expr-17.2.1",
-    [[
-        SELECT 'abcxyz' NOT LIKE 'ABC%'
-    ]], {
-        -- <e_expr-17.2.1>
-        0
-        -- </e_expr-17.2.1>
-    })
+    "e_expr-17.2.1", [[ SELECT 'abcxyz' NOT LIKE 'ABC%' ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-17.2.2",
-    [[
-        SELECT 'abcxyz' NOT LIKE 'abc%'
-    ]], {
-        -- <e_expr-17.2.2>
-        0
-        -- </e_expr-17.2.2>
-    })
+    "e_expr-17.2.2", [[ SELECT 'abcxyz' NOT LIKE 'abc%' ]], {0}
+)
 
 test:do_execsql_test(
-    "e_expr-17.2.3",
-    [[
-        SELECT 'abdxyz' NOT LIKE 'abc%'
-    ]], {
-        -- <e_expr-17.2.3>
-        1
-        -- </e_expr-17.2.3>
-    })
+    "e_expr-17.2.3", [[ SELECT 'abdxyz' NOT LIKE 'abc%' ]], {1}
+)
 
 -- Legacy from the original code. Must be replaced with analogue functions.
 local db = nil
@@ -2331,43 +1337,27 @@ if 0>0 then
     db("nullvalue", "null")
     test:do_execsql_test(
         "e_expr-17.2.4",
-        [[
-            SELECT 'abcxyz' NOT GLOB NULL
-        ]], {
-            -- <e_expr-17.2.4>
-            "null"
-            -- </e_expr-17.2.4>
-        })
+        [[ SELECT 'abcxyz' NOT GLOB NULL ]],
+        {"null"}
+    )
 
     test:do_execsql_test(
         "e_expr-17.2.5",
-        [[
-            SELECT 'abcxyz' NOT LIKE NULL
-        ]], {
-            -- <e_expr-17.2.5>
-            "null"
-            -- </e_expr-17.2.5>
-        })
+        [[ SELECT 'abcxyz' NOT LIKE NULL ]],
+        {"null"}
+    )
 
     test:do_execsql_test(
         "e_expr-17.2.6",
-        [[
-            SELECT NULL NOT GLOB 'abc*'
-        ]], {
-            -- <e_expr-17.2.6>
-            "null"
-            -- </e_expr-17.2.6>
-        })
+        [[ SELECT NULL NOT GLOB 'abc*' ]],
+        {"null"}
+    )
 
     test:do_execsql_test(
         "e_expr-17.2.7",
-        [[
-            SELECT NULL NOT LIKE 'ABC%'
-        ]], {
-            -- <e_expr-17.2.7>
-            "null"
-            -- </e_expr-17.2.7>
-        })
+        [[ SELECT NULL NOT LIKE 'ABC%' ]],
+        {"null"}
+    )
 
     db("nullvalue", "")
 end
@@ -2399,46 +1389,26 @@ end
 box.internal.sql_create_function("REGEXP", "INT", regexpfunc, 2)
 --db("func", "regexp", "-argcount", 2, "regexpfunc")
 
-test:do_execsql_test(
-    "e_expr-18.2.1",
-    [[
-        SELECT 'abc' REGEXP 'def'
-    ]], {
-        -- <e_expr-18.2.1>
-        1
-        -- </e_expr-18.2.1>
-    })
+test:do_execsql_test("e_expr-18.2.1", [[ SELECT 'abc' REGEXP 'def' ]], {1})
 
 test:do_test(
     "e_expr-18.2.2",
     function()
         return regexpargs
-    end, {
-        -- <e_expr-18.2.2>
-        "def", "abc"
-        -- </e_expr-18.2.2>
-    })
+    end,
+    {"def", "abc"}
+)
 
-regexpargs = {  }
-test:do_execsql_test(
-    "e_expr-18.2.3",
-    [[
-        SELECT 'X' NOT REGEXP 'Y'
-    ]], {
-        -- <e_expr-18.2.3>
-        0
-        -- </e_expr-18.2.3>
-    })
+regexpargs = {}
+test:do_execsql_test("e_expr-18.2.3", [[ SELECT 'X' NOT REGEXP 'Y' ]], {0})
 
 test:do_test(
     "e_expr-18.2.4",
     function()
         return regexpargs
-    end, {
-        -- <e_expr-18.2.4>
-        "Y", "X"
-        -- </e_expr-18.2.4>
-    })
+    end,
+    {"Y", "X"}
+)
 
 -- EVIDENCE-OF: R-37916-47407 The MATCH operator is a special syntax for
 -- the match() application-defined function.
@@ -2447,7 +1417,7 @@ test:do_test(
 -- function with more helpful logic.
 --
 
-local matchargs = {  }
+local matchargs = {}
 local function matchfunc(...)
     local args = {...}
     for _, v in ipairs(args) do
@@ -2457,46 +1427,26 @@ local function matchfunc(...)
 end
 box.internal.sql_create_function("MATCH", "INT", matchfunc, 2)
 
-test:do_execsql_test(
-    "e_expr-19.2.1",
-    [[
-        SELECT 'abc' MATCH 'def'
-    ]], {
-        -- <e_expr-19.2.1>
-        1
-        -- </e_expr-19.2.1>
-    })
+test:do_execsql_test("e_expr-19.2.1", [[ SELECT 'abc' MATCH 'def' ]], {1})
 
 test:do_test(
     "e_expr-19.2.2",
     function()
         return matchargs
-    end, {
-        -- <e_expr-19.2.2>
-        "def", "abc"
-        -- </e_expr-19.2.2>
-    })
+    end,
+    {"def", "abc"}
+)
 
-matchargs = {  }
-test:do_execsql_test(
-    "e_expr-19.2.3",
-    [[
-        SELECT 'X' NOT MATCH 'Y'
-    ]], {
-        -- <e_expr-19.2.3>
-        0
-        -- </e_expr-19.2.3>
-    })
+matchargs = {}
+test:do_execsql_test("e_expr-19.2.3", [[ SELECT 'X' NOT MATCH 'Y' ]], {0})
 
 test:do_test(
     "e_expr-19.2.4",
     function()
         return matchargs
-    end, {
-        -- <e_expr-19.2.4>
-        "Y", "X"
-        -- </e_expr-19.2.4>
-    })
+    end,
+    {"Y", "X"}
+)
 --sql("db", "test.db")
 ---------------------------------------------------------------------------
 -- Test cases for the testable statements related to the CASE expression.
@@ -2506,29 +1456,21 @@ test:do_test(
 --
 test:do_execsql_test(
     "e_expr-20.1",
-    [[
-        SELECT CASE WHEN 1 THEN 'true' WHEN 0 THEN 'false' ELSE 'else' END;
-    ]], {
-        -- <e_expr-20.1>
-        "true"
-        -- </e_expr-20.1>
-    })
+    [[ SELECT CASE WHEN 1 THEN 'true' WHEN 0 THEN 'false' ELSE 'else' END; ]],
+    {"true"}
+)
 
 test:do_execsql_test(
     "e_expr-20.2",
-    [[
-        SELECT CASE 0 WHEN 1 THEN 'true' WHEN 0 THEN 'false' ELSE 'else' END;
-    ]], {
-        -- <e_expr-20.2>
-        "false"
-        -- </e_expr-20.2>
-    })
+    [[ SELECT CASE 0 WHEN 1 THEN 'true' WHEN 0 THEN 'false' ELSE 'else' END; ]],
+    {"false"}
+)
 
 local a, b, c -- luacheck: ignore unused a b c
 a = 0
 b = 0
 c = 0
-local varlist = {  }
+local varlist = {}
 local function var(nm)
     table.insert(varlist,nm)
     local result = loadstring("return "..nm)()
@@ -2543,50 +1485,39 @@ box.internal.sql_create_function("VAR", "BLOB", var)
 
 test:do_execsql_test(
     "e_expr-21.1.1",
-    [[
-        SELECT CASE WHEN var('a') THEN 'A'
+    [[  SELECT CASE WHEN var('a') THEN 'A'
                     WHEN var('b') THEN 'B'
-                    WHEN var('c') THEN 'C' END
-    ]], {
-        -- <e_expr-21.1.1>
-        ""
-        -- </e_expr-21.1.1>
-    })
+                    WHEN var('c') THEN 'C'
+        END ]],
+    {""}
+)
 
 test:do_test(
     "e_expr-21.1.2",
     function()
         return varlist
-    end, {
-        -- <e_expr-21.1.2>
-        "a", "b", "c"
-        -- </e_expr-21.1.2>
-    })
+    end,
+    {"a", "b", "c"}
+)
 
-varlist = {  }
+varlist = {}
 test:do_execsql_test(
     "e_expr-21.1.3",
-    [[
-        SELECT CASE WHEN var('c') THEN 'C'
+    [[  SELECT CASE WHEN var('c') THEN 'C'
                     WHEN var('b') THEN 'B'
                     WHEN var('a') THEN 'A'
                     ELSE 'no result'
-        END
-    ]], {
-        -- <e_expr-21.1.3>
-        "no result"
-        -- </e_expr-21.1.3>
-    })
+        END ]],
+    {"no result"}
+)
 
 test:do_test(
     "e_expr-21.1.4",
     function()
         return varlist
-    end, {
-        -- <e_expr-21.1.4>
-        "c", "b", "a"
-        -- </e_expr-21.1.4>
-    })
+    end,
+    {"c", "b", "a"}
+)
 
 -- EVIDENCE-OF: R-39009-25596 The result of the CASE expression is the
 -- evaluation of the THEN expression that corresponds to the first WHEN
@@ -2597,49 +1528,37 @@ b = 1
 c = 0
 test:do_execsql_test(
     "e_expr-21.2.1",
-    [[
-        SELECT CASE WHEN var('a') THEN 'A'
+    [[  SELECT CASE WHEN var('a') THEN 'A'
                     WHEN var('b') THEN 'B'
                     WHEN var('c') THEN 'C'
                     ELSE 'no result'
-        END
-    ]], {
-        -- <e_expr-21.2.1>
-        "B"
-        -- </e_expr-21.2.1>
-    })
+        END ]],
+    {"B"}
+)
 a = 0
 b = 1
 c = 1
 test:do_execsql_test(
     "e_expr-21.2.2",
-    [[
-        SELECT CASE WHEN var('a') THEN 'A'
+    [[  SELECT CASE WHEN var('a') THEN 'A'
                     WHEN var('b') THEN 'B'
                     WHEN var('c') THEN 'C'
                     ELSE 'no result'
-        END
-    ]], {
-        -- <e_expr-21.2.2>
-        "B"
-        -- </e_expr-21.2.2>
-    })
+        END ]],
+    {"B"}
+)
 a = 0
 b = 0
 c = 1
 test:do_execsql_test(
     "e_expr-21.2.3",
-    [[
-        SELECT CASE WHEN var('a') THEN 'A'
+    [[  SELECT CASE WHEN var('a') THEN 'A'
                     WHEN var('b') THEN 'B'
                     WHEN var('c') THEN 'C'
                     ELSE 'no result'
-        END
-    ]], {
-        -- <e_expr-21.2.3>
-        "C"
-        -- </e_expr-21.2.3>
-    })
+        END ]],
+    {"C"}
+)
 
 -- EVIDENCE-OF: R-24227-04807 Or, if none of the WHEN expressions
 -- evaluate to true, the result of evaluating the ELSE expression, if
@@ -2650,17 +1569,13 @@ b = 0
 c = 0
 test:do_execsql_test(
     "e_expr-21.3.1",
-    [[
-        SELECT CASE WHEN var('a') THEN 'A'
+    [[  SELECT CASE WHEN var('a') THEN 'A'
                     WHEN var('b') THEN 'B'
                     WHEN var('c') THEN 'C'
                     ELSE 'no result'
-        END
-    ]], {
-        -- <e_expr-21.3.1>
-        "no result"
-        -- </e_expr-21.3.1>
-    })
+        END ]],
+    {"no result"}
+)
 
 -- EVIDENCE-OF: R-14168-07579 If there is no ELSE expression and none of
 -- the WHEN expressions are true, then the overall result is NULL.
@@ -2670,16 +1585,12 @@ if 0>0 then
     db("nullvalue", "null")
     test:do_execsql_test(
         "e_expr-21.3.2",
-        [[
-            SELECT CASE WHEN var('a') THEN 'A'
+        [[  SELECT CASE WHEN var('a') THEN 'A'
                         WHEN var('b') THEN 'B'
                         WHEN var('c') THEN 'C'
-            END
-        ]], {
-            -- <e_expr-21.3.2>
-            "null"
-            -- </e_expr-21.3.2>
-        })
+            END ]],
+        { "null"}
+    )
 
     db("nullvalue", "")
     -- EVIDENCE-OF: R-13943-13592 A NULL result is considered untrue when
@@ -2687,23 +1598,15 @@ if 0>0 then
     --
     test:do_execsql_test(
         "e_expr-21.4.1",
-        [[
-            SELECT CASE WHEN NULL THEN 'A' WHEN 1 THEN 'B' END
-        ]], {
-            -- <e_expr-21.4.1>
-            "B"
-            -- </e_expr-21.4.1>
-        })
+        [[ SELECT CASE WHEN NULL THEN 'A' WHEN 1 THEN 'B' END ]],
+        {"B"}
+    )
 
     test:do_execsql_test(
         "e_expr-21.4.2",
-        [[
-            SELECT CASE WHEN 0 THEN 'A' WHEN NULL THEN 'B' ELSE 'C' END
-        ]], {
-            -- <e_expr-21.4.2>
-            "C"
-            -- </e_expr-21.4.2>
-        })
+        [[ SELECT CASE WHEN 0 THEN 'A' WHEN NULL THEN 'B' ELSE 'C' END ]],
+        {"C"}
+    )
 
     -- EVIDENCE-OF: R-38620-19499 In a CASE with a base expression, the base
     -- expression is evaluated just once and the result is compared against
@@ -2721,26 +1624,20 @@ if 0>0 then
     for _ in X(0, "X!foreach", [=[["a b c",[["list",[["expr","3"]],[["expr","4"]],[["expr","5"]]]]]]=]) do
         break
     end
-    varlist = {  }
+    varlist = {}
     test:do_execsql_test(
         "e_expr-22.1.1",
-        [[
-            SELECT CASE var('a') WHEN 1 THEN 'A' WHEN 2 THEN 'B' WHEN 3 THEN 'C' END
-        ]], {
-            -- <e_expr-22.1.1>
-            "C"
-            -- </e_expr-22.1.1>
-        })
+        [[ SELECT CASE var('a') WHEN 1 THEN 'A' WHEN 2 THEN 'B' WHEN 3 THEN 'C' END ]],
+        {"C"}
+    )
 
     test:do_test(
         "e_expr-22.1.2",
         function()
             return varlist
-        end, {
-            -- <e_expr-22.1.2>
-            "a"
-            -- </e_expr-22.1.2>
-        })
+        end,
+        {"a"}
+    )
 end
 
 -- EVIDENCE-OF: R-07667-49537 The result of the CASE expression is the
@@ -2749,23 +1646,15 @@ end
 --
 test:do_execsql_test(
     "e_expr-22.2.1",
-    [[
-        SELECT CASE 23 WHEN 1 THEN 'A' WHEN 23 THEN 'B' WHEN 23 THEN 'C' END
-    ]], {
-        -- <e_expr-22.2.1>
-        "B"
-        -- </e_expr-22.2.1>
-    })
+    [[ SELECT CASE 23 WHEN 1 THEN 'A' WHEN 23 THEN 'B' WHEN 23 THEN 'C' END ]],
+    {"B"}
+)
 
 test:do_execsql_test(
     "e_expr-22.2.2",
-    [[
-        SELECT CASE 1 WHEN 1 THEN 'A' WHEN 23 THEN 'B' WHEN 23 THEN 'C' END
-    ]], {
-        -- <e_expr-22.2.2>
-        "A"
-        -- </e_expr-22.2.2>
-    })
+    [[ SELECT CASE 1 WHEN 1 THEN 'A' WHEN 23 THEN 'B' WHEN 23 THEN 'C' END ]],
+    {"A"}
+)
 
 -- EVIDENCE-OF: R-47543-32145 Or, if none of the WHEN expressions
 -- evaluate to a value equal to the base expression, the result of
@@ -2773,13 +1662,10 @@ test:do_execsql_test(
 --
 test:do_execsql_test(
     "e_expr-22.3.1",
-    [[
-        SELECT CASE 24 WHEN 1 THEN 'A' WHEN 23 THEN 'B' WHEN 23 THEN 'C' ELSE 'D' END
-    ]], {
-        -- <e_expr-22.3.1>
-        "D"
-        -- </e_expr-22.3.1>
-    })
+    [[   SELECT CASE 24 WHEN 1 THEN 'A' WHEN 23 THEN 'B' 
+                        WHEN 23 THEN 'C' ELSE 'D' END ]],
+    {"D"}
+)
 
 -- EVIDENCE-OF: R-54721-48557 If there is no ELSE expression and none of
 -- the WHEN expressions produce a result equal to the base expression,
@@ -2787,25 +1673,17 @@ test:do_execsql_test(
 --
 test:do_execsql_test(
     "e_expr-22.4.1",
-    [[
-        SELECT CASE 24 WHEN 1 THEN 'A' WHEN 23 THEN 'B' WHEN 23 THEN 'C' END
-    ]], {
-        -- <e_expr-22.4.1>
-        ""
-        -- </e_expr-22.4.1>
-    })
+    [[ SELECT CASE 24 WHEN 1 THEN 'A' WHEN 23 THEN 'B' WHEN 23 THEN 'C' END ]],
+    {""})
+
 -- MUST_WORK_TEST uses access to nullvalue
 if 0>0 then
     db("nullvalue", "null")
     test:do_execsql_test(
         "e_expr-22.4.2",
-        [[
-            SELECT CASE 24 WHEN 1 THEN 'A' WHEN 23 THEN 'B' WHEN 23 THEN 'C' END
-        ]], {
-            -- <e_expr-22.4.2>
-            "null"
-            -- </e_expr-22.4.2>
-        })
+        [[ SELECT CASE 24 WHEN 1 THEN 'A' WHEN 23 THEN 'B' WHEN 23 THEN 'C' END ]],
+        {"null"}
+    )
 
     db("nullvalue", "")
 end
@@ -2866,23 +1744,15 @@ end
 --
 test:do_execsql_test(
     "e_expr-24.1.1",
-    [[
-        SELECT CASE NULL WHEN 'abc' THEN 'A' WHEN 'def' THEN 'B' END;
-    ]], {
-        -- <e_expr-24.1.1>
-        ""
-        -- </e_expr-24.1.1>
-    })
+    [[ SELECT CASE NULL WHEN 'abc' THEN 'A' WHEN 'def' THEN 'B' END; ]],
+    {""}
+)
 
 test:do_execsql_test(
     "e_expr-24.1.2",
-    [[
-        SELECT CASE NULL WHEN 'abc' THEN 'A' WHEN 'def' THEN 'B' ELSE 'C' END;
-    ]], {
-        -- <e_expr-24.1.2>
-        "C"
-        -- </e_expr-24.1.2>
-    })
+    [[ SELECT CASE NULL WHEN 'abc' THEN 'A' WHEN 'def' THEN 'B' ELSE 'C' END; ]],
+    {"C"}
+)
 
 -- EVIDENCE-OF: R-56280-17369 Both forms of the CASE expression use lazy,
 -- or short-circuit, evaluation.
@@ -2893,50 +1763,38 @@ b = "1"
 c = "0"
 test:do_execsql_test(
     "e_expr-25.1.1",
-    [[
-        SELECT CASE WHEN var('a') THEN 'A'
+    [[  SELECT CASE WHEN var('a') THEN 'A'
                     WHEN var('b') THEN 'B'
                     WHEN var('c') THEN 'C'
-        END
-    ]], {
-        -- <e_expr-25.1.1>
-        "B"
-        -- </e_expr-25.1.1>
-    })
+        END ]],
+    {"B"}
+)
 
 test:do_test(
     "e_expr-25.1.2",
     function()
         return varlist
-    end, {
-        -- <e_expr-25.1.2>
-        "a", "b"
-        -- </e_expr-25.1.2>
-    })
+    end,
+    {"a", "b"}
+)
 
-varlist = {  }
+varlist = {}
 test:do_execsql_test(
     "e_expr-25.1.3",
-    [[
-        SELECT CASE '0' WHEN var('a') THEN 'A'
+    [[  SELECT CASE '0' WHEN var('a') THEN 'A'
                         WHEN var('b') THEN 'B'
                         WHEN var('c') THEN 'C'
-        END
-    ]], {
-        -- <e_expr-25.1.3>
-        "A"
-        -- </e_expr-25.1.3>
-    })
+        END ]],
+    {"A"}
+)
 
 test:do_test(
     "e_expr-25.1.4",
     function()
         return varlist
-    end, {
-        -- <e_expr-25.1.4>
-        "a"
-        -- </e_expr-25.1.4>
-    })
+    end,
+    {"a"}
+)
 
 -- EVIDENCE-OF: R-34773-62253 The only difference between the following
 -- two CASE expressions is that the x expression is evaluated exactly
@@ -2953,73 +1811,57 @@ box.internal.sql_create_function("CEVAL", "BLOB", ceval)
 evalcount = 0
 test:do_execsql_test(
     "e_expr-26.1.1",
-    [[
-        CREATE TABLE t2(x INT PRIMARY KEY, w1 INT, r1 TEXT, w2 INT, r2 TEXT, r3 TEXT);
+    [[  CREATE TABLE t2(x INT PRIMARY KEY, w1 INT, r1 TEXT, w2 INT, r2 TEXT, r3 TEXT);
         INSERT INTO t2 VALUES(1, 1, 'R1', 2, 'R2', 'R3');
         INSERT INTO t2 VALUES(2, 1, 'R1', 2, 'R2', 'R3');
-        INSERT INTO t2 VALUES(3, 1, 'R1', 2, 'R2', 'R3');
-    ]], {
-        -- <e_expr-26.1.1>
-
-        -- </e_expr-26.1.1>
-    })
+        INSERT INTO t2 VALUES(3, 1, 'R1', 2, 'R2', 'R3'); ]],
+    {}
+)
 
 test:do_execsql_test(
     "e_expr-26.1.2",
-    [[
-        SELECT CASE x WHEN w1 THEN r1 WHEN w2 THEN r2 ELSE r3 END FROM t2
-    ]], {
-        -- <e_expr-26.1.2>
-        "R1", "R2", "R3"
-        -- </e_expr-26.1.2>
-    })
+    [[ SELECT CASE x WHEN w1 THEN r1 WHEN w2 THEN r2 ELSE r3 END FROM t2 ]],
+    {"R1", "R2", "R3"}
+)
 
 test:do_execsql_test(
     "e_expr-26.1.3",
-    [[
-        SELECT CASE WHEN x=w1 THEN r1 WHEN x=w2 THEN r2 ELSE r3 END FROM t2
-    ]], {
-        -- <e_expr-26.1.3>
-        "R1", "R2", "R3"
-        -- </e_expr-26.1.3>
-    })
+    [[ SELECT CASE WHEN x=w1 THEN r1 WHEN x=w2 THEN r2 ELSE r3 END FROM t2 ]],
+    {"R1", "R2", "R3"}
+)
 
 test:do_execsql_test(
     "e_expr-26.1.4",
-    [[
-        SELECT CASE ceval(x) WHEN w1 THEN r1 WHEN w2 THEN r2 ELSE r3 END FROM t2
-    ]], {
-        -- <e_expr-26.1.4>
-        "R1", "R2", "R3"
-        -- </e_expr-26.1.4>
-    })
+    [[ SELECT CASE ceval(x) WHEN w1 THEN r1 WHEN w2 THEN r2 ELSE r3 END FROM t2 ]],
+    {"R1", "R2", "R3"}
+)
 
 test:do_test(
     "e_expr-26.1.5",
     function()
         return evalcount
-    end, 3)
+    end,
+    3
+)
 
 evalcount = 0
 test:do_execsql_test(
     "e_expr-26.1.6",
-    [[
-        SELECT CASE
-          WHEN ceval(x)=w1 THEN r1
-          WHEN ceval(x)=w2 THEN r2
-          ELSE r3 END
-        FROM t2
-    ]], {
-        -- <e_expr-26.1.6>
-        "R1", "R2", "R3"
-        -- </e_expr-26.1.6>
-    })
+    [[  SELECT CASE
+        WHEN ceval(x)=w1 THEN r1
+        WHEN ceval(x)=w2 THEN r2
+        ELSE r3 END
+        FROM t2 ]],
+    {"R1", "R2", "R3"}
+)
 
 test:do_test(
     "e_expr-26.1.6",
     function()
         return evalcount
-    end, 5)
+    end,
+    5
+)
 
 
 ---------------------------------------------------------------------------
@@ -3034,16 +1876,12 @@ test:do_test(
 --
 test:do_execsql_test(
     "e_expr-27.1.2",
-    [[
-        SELECT
-          typeof(CAST(X'555655' as TEXT)), CAST(X'555655' as TEXT),
-          typeof(CAST('1.23' as REAL)), CAST('1.23' as REAL),
-          typeof(CAST(4.5 as INTEGER)), CAST(4.5 as INTEGER)
-    ]], {
-        -- <e_expr-27.1.2>
-        "text", "UVU", "real", 1.23, "integer", 4
-        -- </e_expr-27.1.2>
-    })
+    [[  SELECT
+        typeof(CAST(X'555655' as TEXT)), CAST(X'555655' as TEXT),
+        typeof(CAST('1.23' as REAL)), CAST('1.23' as REAL),
+        typeof(CAST(4.5 as INTEGER)), CAST(4.5 as INTEGER) ]],
+    {"text", "UVU", "real", 1.23, "integer", 4}
+)
 
 -- EVIDENCE-OF: R-32434-09092 If the value of expr is NULL, then the
 -- result of the CAST expression is also NULL.
@@ -3104,11 +1942,9 @@ do_expr_test("e_expr-29.4.3", " CAST('XXI' AS REAL) ", "real", 0.0)
 --
 do_expr_test("e_expr-30.1.1", " CAST(X'313233' AS INTEGER) ", "integer", 123)
 do_expr_test("e_expr-30.1.2", " CAST(X'2D363738' AS INTEGER) ", "integer", -678)
-do_expr_test("e_expr-30.1.3", [[
-  CAST(X'31303030303030' AS INTEGER)
+do_expr_test("e_expr-30.1.3", [[  CAST(X'31303030303030' AS INTEGER)
 ]], "integer", 1000000)
-do_expr_test("e_expr-30.1.4", [[
-  CAST(X'2D31313235383939393036383432363234' AS INTEGER)
+do_expr_test("e_expr-30.1.4", [[  CAST(X'2D31313235383939393036383432363234' AS INTEGER)
 ]], "integer", -1125899906842624LL)
 
 -- EVIDENCE-OF: R-47612-45842 When casting a TEXT value to INTEGER, the
@@ -3155,12 +1991,18 @@ do_expr_test("e_expr-31.1.4", " CAST(-0.99999 AS INTEGER) ", "integer", 0)
 --
 do_expr_test("e_expr-31.2.1", " CAST(2e+50 AS INT) ", "integer", 9223372036854775807LL)
 do_expr_test("e_expr-31.2.2", " CAST(-2e+50 AS INT) ", "integer", -9223372036854775808LL)
-do_expr_test("e_expr-31.2.3", [[
-  CAST(-9223372036854775809.0 AS INT)
-]], "integer", -9223372036854775808LL)
-do_expr_test("e_expr-31.2.4", [[
-  CAST(9223372036854775809.0 AS INT)
-]], "integer", 9223372036854775807LL)
+do_expr_test(
+    "e_expr-31.2.3",
+    [[  CAST(-9223372036854775809.0 AS INT) ]],
+    "integer",
+    -9223372036854775808LL
+)
+do_expr_test(
+    "e_expr-31.2.4",
+    [[  CAST(9223372036854775809.0 AS INT) ]],
+    "integer",
+    9223372036854775807LL
+)
 -- EVIDENCE-OF: R-09295-61337 Casting a TEXT or BLOB value into NUMERIC
 -- first does a forced conversion into REAL but then further converts the
 -- result into INTEGER if and only if the conversion from REAL to INTEGER
@@ -3177,12 +2019,18 @@ do_expr_test("e_expr-32.1.5", " CAST('11.1abc' AS NUMERIC) ", "real", 11.1)
 --
 do_expr_test("e_expr-32.2.1", " CAST(13.0 AS NUMERIC) ", "real", 13.0)
 do_expr_test("e_expr-32.2.2", " CAST(13.5 AS NUMERIC) ", "real", 13.5)
-do_expr_test("e_expr-32.2.3", [[
-  CAST(-9223372036854775808 AS NUMERIC)
-]], "real", -9223372036854775808)
-do_expr_test("e_expr-32.2.4", [[
-  CAST(9223372036854775807 AS NUMERIC)
-]], "real", 9223372036854775807)
+do_expr_test(
+    "e_expr-32.2.3",
+    [[ CAST(-9223372036854775808 AS NUMERIC) ]],
+    "real",
+    -9223372036854775808
+)
+do_expr_test(
+    "e_expr-32.2.4",
+    [[ CAST(9223372036854775807 AS NUMERIC) ]],
+    "real",
+    9223372036854775807
+)
 -- EVIDENCE-OF: R-64550-29191 Note that the result from casting any
 -- non-BLOB value into a SCALAR and the result from casting any SCALAR value
 -- into a non-BLOB value may be different depending on whether the
@@ -3195,17 +2043,13 @@ do_expr_test("e_expr-32.2.4", [[
 --sql("db", "test.db")
 test:do_execsql_test(
     "e_expr-34.1",
-    [[
-        CREATE TABLE t1(id INT PRIMARY KEY, a INT, b INT);
+    [[  CREATE TABLE t1(id INT PRIMARY KEY, a INT, b INT);
         INSERT INTO t1 VALUES(1, 1, 2);
         INSERT INTO t1 VALUES(2, NULL, 2);
         INSERT INTO t1 VALUES(3, 1, NULL);
-        INSERT INTO t1 VALUES(4, NULL, NULL);
-    ]], {
-        -- <e_expr-34.1>
-
-        -- </e_expr-34.1>
-    })
+        INSERT INTO t1 VALUES(4, NULL, NULL); ]],
+    {}
+)
 
 -- EVIDENCE-OF: R-25588-27181 The EXISTS operator always evaluates to one
 -- of the integer values 0 and 1.
@@ -3287,15 +2131,12 @@ end
 test:catchsql "DROP TABLE t22;"
 test:do_execsql_test(
     "e_expr-35.0",
-    [[
-        CREATE TABLE t22(a TEXT PRIMARY KEY, b TEXT);
+    [[  CREATE TABLE t22(a TEXT PRIMARY KEY, b TEXT);
         INSERT INTO t22 VALUES('one', 'two');
         INSERT INTO t22 VALUES('three', NULL);
-    ]], {
-        -- <e_expr-35.0>
-
-        -- </e_expr-35.0>
-    })
+    ]],
+    {}
+)
 
 -- EVIDENCE-OF: R-00980-39256 A SELECT statement enclosed in parentheses
 -- may appear as a scalar quantity.
@@ -3308,12 +2149,18 @@ do_expr_test("e_expr-35.1.1", " (SELECT 35)   ", "integer", 35)
 do_expr_test("e_expr-35.1.2", " (SELECT NULL) ", "null", "")
 do_expr_test("e_expr-35.1.3", " (SELECT count(*) FROM t22) ", "integer", 2)
 do_expr_test("e_expr-35.1.4", " (SELECT 4 FROM t22 LIMIT 1) ", "integer", 4)
-do_expr_test("e_expr-35.1.5", [[
-  (SELECT b FROM t22 UNION SELECT a+1 FROM t22 LIMIT 1)
-]], "null", "")
-do_expr_test("e_expr-35.1.6", [[
-  (SELECT a FROM t22 UNION SELECT COALESCE(b, 55) FROM t22 ORDER BY 1 LIMIT 1)
-]], "integer", 55)
+do_expr_test(
+    "e_expr-35.1.5",
+    [[ (SELECT b FROM t22 UNION SELECT a+1 FROM t22 LIMIT 1) ]],
+    "null",
+    ""
+)
+do_expr_test(
+    "e_expr-35.1.6",
+    [[ (SELECT a FROM t22 UNION SELECT COALESCE(b, 55) FROM t22 ORDER BY 1 LIMIT 1) ]],
+    "integer",
+    55
+)
 -- EVIDENCE-OF: R-46899-53765 A SELECT used as a scalar quantity must
 -- return a result set with a single column.
 --
@@ -3332,10 +2179,8 @@ local M = {1, "/sub--select returns [23] columns -- expected 1/"}
 for _, val in ipairs(data) do
     local tn = val[1]
     local sql = val[2]
-    test:do_catchsql_test(
-        "e_expr-35.2."..tn,
-        sql, M)
 
+    test:do_catchsql_test( "e_expr-35.2."..tn, sql, M)
 end
 -- EVIDENCE-OF: R-35764-28041 The result of the expression is the value
 -- of the only column in the first row returned by the SELECT statement.
@@ -3345,16 +2190,12 @@ end
 --
 test:do_execsql_test(
     "e_expr-36.3.1",
-    [[
-        CREATE TABLE t4(x INT PRIMARY KEY, y TEXT);
+    [[  CREATE TABLE t4(x INT PRIMARY KEY, y TEXT);
         INSERT INTO t4 VALUES(1, 'one');
         INSERT INTO t4 VALUES(2, 'two');
-        INSERT INTO t4 VALUES(3, 'three');
-    ]], {
-        -- <e_expr-36.3.1>
-
-        -- </e_expr-36.3.1>
-    })
+        INSERT INTO t4 VALUES(3, 'three'); ]],
+    {}
+)
 
 data = {
     {2, "( SELECT x FROM t4 ORDER BY x LIMIT 1 )     ", "integer", 1},
@@ -3364,7 +2205,7 @@ data = {
     {6, "( SELECT y FROM t4 ORDER BY y DESC LIMIT 1 )", "text", "two"},
     {7, "( SELECT sum(x) FROM t4 )          ", "integer", 6},
     {8, "( SELECT group_concat(y,'') FROM t4 )", "text", "onetwothree"},
-    {9, "( SELECT max(x) FROM t4 WHERE y LIKE '___')", "integer", 2 },
+    {9, "( SELECT max(x) FROM t4 WHERE y LIKE '___')", "integer", 2},
 }
 for _, val in ipairs(data) do
     local tn = val[1]
@@ -3390,106 +2231,66 @@ end
 --
 test:do_execsql_test(
     "e_expr-37.1",
-    [[
-        SELECT CASE WHEN NULL THEN 'true' ELSE 'false' END;
-    ]], {
-        -- <e_expr-37.1>
-        "false"
-        -- </e_expr-37.1>
-    })
+    [[ SELECT CASE WHEN NULL THEN 'true' ELSE 'false' END; ]],
+    {"false"}
+)
 
 test:do_execsql_test(
     "e_expr-37.2",
-    [[
-        SELECT CASE WHEN 0.0 THEN 'true' ELSE 'false' END;
-    ]], {
-        -- <e_expr-37.2>
-        "false"
-        -- </e_expr-37.2>
-    })
+    [[ SELECT CASE WHEN 0.0 THEN 'true' ELSE 'false' END; ]],
+    {"false"}
+)
 
 test:do_execsql_test(
     "e_expr-37.3",
-    [[
-        SELECT CASE WHEN 0 THEN 'true' ELSE 'false' END;
-    ]], {
-        -- <e_expr-37.3>
-        "false"
-        -- </e_expr-37.3>
-    })
+    [[ SELECT CASE WHEN 0 THEN 'true' ELSE 'false' END; ]],
+    {"false"}
+)
 
 test:do_execsql_test(
     "e_expr-37.4",
-    [[
-        SELECT CASE WHEN 'engligh' THEN 'true' ELSE 'false' END;
-    ]], {
-        -- <e_expr-37.4>
-        "false"
-        -- </e_expr-37.4>
-    })
+    [[ SELECT CASE WHEN 'engligh' THEN 'true' ELSE 'false' END; ]],
+    {"false"}
+)
 
 test:do_execsql_test(
     "e_expr-37.5",
-    [[
-        SELECT CASE WHEN '0' THEN 'true' ELSE 'false' END;
-    ]], {
-        -- <e_expr-37.5>
-        "false"
-        -- </e_expr-37.5>
-    })
+    [[ SELECT CASE WHEN '0' THEN 'true' ELSE 'false' END; ]],
+    {"false"}
+)
 
 -- EVIDENCE-OF: R-55532-10108 Values 1, 1.0, 0.1, -0.1 and '1english' are
 -- considered to be true.
 --
 test:do_execsql_test(
     "e_expr-37.6",
-    [[
-        SELECT CASE WHEN 1 THEN 'true' ELSE 'false' END;
-    ]], {
-        -- <e_expr-37.6>
-        "true"
-        -- </e_expr-37.6>
-    })
+    [[ SELECT CASE WHEN 1 THEN 'true' ELSE 'false' END; ]],
+    {"true"}
+)
 
 test:do_execsql_test(
     "e_expr-37.7",
-    [[
-        SELECT CASE WHEN 1.0 THEN 'true' ELSE 'false' END;
-    ]], {
-        -- <e_expr-37.7>
-        "true"
-        -- </e_expr-37.7>
-    })
+    [[ SELECT CASE WHEN 1.0 THEN 'true' ELSE 'false' END; ]],
+    {"true"}
+)
 
 test:do_execsql_test(
     "e_expr-37.8",
-    [[
-        SELECT CASE WHEN 0.1 THEN 'true' ELSE 'false' END;
-    ]], {
-        -- <e_expr-37.8>
-        "true"
-        -- </e_expr-37.8>
-    })
+    [[ SELECT CASE WHEN 0.1 THEN 'true' ELSE 'false' END; ]],
+    {"true"}
+)
 
 test:do_execsql_test(
     "e_expr-37.9",
-    [[
-        SELECT CASE WHEN -0.1 THEN 'true' ELSE 'false' END;
-    ]], {
-        -- <e_expr-37.9>
-        "true"
-        -- </e_expr-37.9>
-    })
+    [[ SELECT CASE WHEN -0.1 THEN 'true' ELSE 'false' END; ]],
+    {"true"}
+)
 
 test:do_execsql_test(
     "e_expr-37.10",
-    [[
-        SELECT CASE WHEN '1english' THEN 'true' ELSE 'false' END;
-    ]], {
-        -- <e_expr-37.10>
-        "true"
-        -- </e_expr-37.10>
-    })
+    [[ SELECT CASE WHEN '1english' THEN 'true' ELSE 'false' END; ]],
+    {"true"}
+)
 
 
 
