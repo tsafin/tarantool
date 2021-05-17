@@ -1035,11 +1035,8 @@ box.execute("SELECT CAST(18446744073709551615 AS SCALAR);")
 ...
 box.execute("SELECT CAST(18446744073709551615 AS BOOLEAN);")
 ---
-- metadata:
-  - name: COLUMN_1
-    type: boolean
-  rows:
-  - [true]
+- null
+- 'Type mismatch: can not convert 18446744073709551615 to boolean'
 ...
 box.execute("SELECT CAST('18446744073709551615' AS INTEGER);")
 ---
@@ -1084,8 +1081,11 @@ box.execute("SELECT CAST(123 AS UNSIGNED);")
 ...
 box.execute("SELECT CAST(-123 AS UNSIGNED);")
 ---
-- null
-- 'Type mismatch: can not convert -123 to unsigned'
+- metadata:
+  - name: COLUMN_1
+    type: unsigned
+  rows:
+  - [18446744073709551493]
 ...
 box.execute("SELECT CAST(1.5 AS UNSIGNED);")
 ---
@@ -1097,19 +1097,13 @@ box.execute("SELECT CAST(1.5 AS UNSIGNED);")
 ...
 box.execute("SELECT CAST(-1.5 AS UNSIGNED);")
 ---
-- metadata:
-  - name: COLUMN_1
-    type: unsigned
-  rows:
-  - [-1]
+- null
+- 'Type mismatch: can not convert -1.5 to unsigned'
 ...
 box.execute("SELECT CAST(true AS UNSIGNED);")
 ---
-- metadata:
-  - name: COLUMN_1
-    type: unsigned
-  rows:
-  - [1]
+- null
+- 'Type mismatch: can not convert TRUE to unsigned'
 ...
 box.execute("SELECT CAST('123' AS UNSIGNED);")
 ---

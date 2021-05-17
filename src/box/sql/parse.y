@@ -270,7 +270,7 @@ columnlist ::= tcons.
   QUERY KEY OFFSET RAISE RELEASE REPLACE RESTRICT
   RENAME CTIME_KW IF ENABLE DISABLE UUID
   .
-%wildcard ANY.
+%wildcard ANYTHING.
 
 
 // And "ids" is an identifer-or-string.
@@ -1113,7 +1113,7 @@ expr(A) ::= expr(A) COLLATE id(C). {
   A.zEnd = &C.z[C.n];
 }
 
-expr(A) ::= CAST(X) LP expr(E) AS typedef(T) RP(Y). {
+expr(A) ::= CAST(X) LP expr(E) AS cast_typedef(T) RP(Y). {
   spanSet(&A,&X,&Y); /*A-overwrites-X*/
   A.pExpr = sql_expr_new_dequoted(pParse->db, TK_CAST, NULL);
   if (A.pExpr == NULL) {
@@ -1887,3 +1887,8 @@ number_typedef(A) ::= UNSIGNED . { A.type = FIELD_TYPE_UNSIGNED; }
  *   (void) C;
  *}
  */
+
+// cast_typedef is almost typedef but with ANY type enabled
+%type cast_typedef { struct type_def }
+cast_typedef(A) ::= typedef(T) . { A = T; }
+cast_typedef(A) ::= ANY . { A.type = FIELD_TYPE_ANY; }

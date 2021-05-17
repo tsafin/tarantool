@@ -575,17 +575,6 @@ int_to_str0(struct Mem *mem)
 }
 
 static inline int
-int_to_bool(struct Mem *mem)
-{
-	assert((mem->type & (MEM_TYPE_INT | MEM_TYPE_UINT)) != 0);
-	mem->u.b = mem->u.i != 0;
-	mem->type = MEM_TYPE_BOOL;
-	assert(mem->flags == 0);
-	mem->field_type = FIELD_TYPE_BOOLEAN;
-	return 0;
-}
-
-static inline int
 str_to_str0(struct Mem *mem)
 {
 	assert(mem->type == MEM_TYPE_STR);
@@ -811,28 +800,6 @@ double_to_str0(struct Mem *mem)
 }
 
 static inline int
-double_to_bool(struct Mem *mem)
-{
-	assert(mem->type == MEM_TYPE_DOUBLE);
-	mem->u.b = mem->u.r != 0.;
-	mem->type = MEM_TYPE_BOOL;
-	assert(mem->flags == 0);
-	mem->field_type = FIELD_TYPE_BOOLEAN;
-	return 0;
-}
-
-static inline int
-bool_to_int(struct Mem *mem)
-{
-	assert(mem->type == MEM_TYPE_BOOL);
-	mem->u.u = (uint64_t)mem->u.b;
-	mem->type = MEM_TYPE_UINT;
-	assert(mem->flags == 0);
-	mem->field_type = FIELD_TYPE_UNSIGNED;
-	return 0;
-}
-
-static inline int
 bool_to_str0(struct Mem *mem)
 {
 	assert(mem->type == MEM_TYPE_BOOL);
@@ -873,17 +840,36 @@ uuid_to_bin(struct Mem *mem)
 }
 
 int
+mem_to_uint(struct Mem *mem)
+{
+	assert(mem->type < MEM_TYPE_INVALID);
+	if (mem->type == MEM_TYPE_UINT)
+		return 0;
+	if (mem->type == MEM_TYPE_INT) {
+		mem_set_uint(mem, (uint64_t)mem->u.i);
+		return 0;
+	}
+	if ((mem->type & (MEM_TYPE_STR | MEM_TYPE_BIN)) != 0)
+		return bytes_to_uint(mem);
+	if (mem->type == MEM_TYPE_DOUBLE)
+		return double_to_uint(mem);
+	return -1;
+}
+
+int
 mem_to_int(struct Mem *mem)
 {
 	assert(mem->type < MEM_TYPE_INVALID);
-	if ((mem->type & (MEM_TYPE_INT | MEM_TYPE_UINT)) != 0)
+	if (mem->type == MEM_TYPE_INT)
 		return 0;
+	if (mem->type == MEM_TYPE_UINT) {
+		mem_set_int(mem, (int64_t)mem->u.u, false);
+		return 0;
+	}
 	if ((mem->type & (MEM_TYPE_STR | MEM_TYPE_BIN)) != 0)
 		return bytes_to_int(mem);
 	if (mem->type == MEM_TYPE_DOUBLE)
 		return double_to_int(mem);
-	if (mem->type == MEM_TYPE_BOOL)
-		return bool_to_int(mem);
 	return -1;
 }
 
@@ -919,8 +905,6 @@ mem_to_number(struct Mem *mem)
 	assert(mem->type < MEM_TYPE_INVALID);
 	if (mem_is_num(mem))
 		return 0;
-	if (mem->type == MEM_TYPE_BOOL)
-		return bool_to_int(mem);
 	if ((mem->type & (MEM_TYPE_STR | MEM_TYPE_BIN)) != 0) {
 		if (bytes_to_int(mem) == 0)
 			return 0;
@@ -994,19 +978,7 @@ mem_cast_explicit(struct Mem *mem, enum field_type type)
 	}
 	switch (type) {
 	case FIELD_TYPE_UNSIGNED:
-		switch (mem->type) {
-		case MEM_TYPE_UINT:
-			return 0;
-		case MEM_TYPE_STR:
-		case MEM_TYPE_BIN:
-			return bytes_to_uint(mem);
-		case MEM_TYPE_DOUBLE:
-			return double_to_int(mem);
-		case MEM_TYPE_BOOL:
-			return bool_to_int(mem);
-		default:
-			return -1;
-		}
+		return mem_to_uint(mem);
 	case FIELD_TYPE_STRING:
 		return mem_to_str(mem);
 	case FIELD_TYPE_DOUBLE:
@@ -1017,13 +989,8 @@ mem_cast_explicit(struct Mem *mem, enum field_type type)
 		switch (mem->type) {
 		case MEM_TYPE_BOOL:
 			return 0;
-		case MEM_TYPE_INT:
-		case MEM_TYPE_UINT:
-			return int_to_bool(mem);
 		case MEM_TYPE_STR:
 			return str_to_bool(mem);
-		case MEM_TYPE_DOUBLE:
-			return double_to_bool(mem);
 		default:
 			return -1;
 		}
@@ -1048,6 +1015,8 @@ mem_cast_explicit(struct Mem *mem, enum field_type type)
 	case FIELD_TYPE_SCALAR:
 		if ((mem->type & (MEM_TYPE_MAP | MEM_TYPE_ARRAY)) != 0)
 			return -1;
+		return 0;
+	case FIELD_TYPE_ANY:
 		return 0;
 	default:
 		break;

@@ -100,7 +100,7 @@ test:do_execsql_test(
 test:do_execsql_test(
     "in-1.7",
     [[
-        SELECT a+ 100*CAST((a BETWEEN 1 and 3) AS INTEGER) FROM t1 ORDER BY b
+        SELECT a+ 100*(CASE WHEN (a BETWEEN 1 and 3) THEN 1 ELSE 0 END) FROM t1 ORDER BY b
     ]], {
         -- <in-1.7>
         101, 102, 103, 4, 5, 6, 7, 8, 9, 10
@@ -157,7 +157,7 @@ test:do_execsql_test(
 test:do_execsql_test(
     "in-2.5",
     [[
-        SELECT a+100*(CAST(b IN (8,16,24) AS INTEGER)) FROM t1 ORDER BY b
+        SELECT a+100*(CASE WHEN b IN (8,16,24) THEN 1 ELSE 0 END) FROM t1 ORDER BY b
     ]], {
         -- <in-2.5>
         1, 2, 103, 104, 5, 6, 7, 8, 9, 10
@@ -207,7 +207,7 @@ test:do_execsql_test(
 test:do_execsql_test(
     "in-2.10",
     [[
-        SELECT a FROM t1 WHERE LEAST(0, CAST(b IN (a,30) AS INT)) <> 0
+        SELECT a FROM t1 WHERE LEAST(0, CASE WHEN (b IN (a,30)) THEN 1 ELSE 0 END) <> 0
     ]], {
         -- <in-2.10>
 
@@ -253,7 +253,7 @@ test:do_execsql_test(
 test:do_execsql_test(
     "in-3.3",
     [[
-        SELECT a + 100*(CAST(b IN (SELECT b FROM t1 WHERE a<5) AS INTEGER)) FROM t1 ORDER BY b
+        SELECT a + 100*(CASE WHEN (b IN (SELECT b FROM t1 WHERE a<5)) THEN 1 ELSE 0 END) FROM t1 ORDER BY b
     ]], {
         -- <in-3.3>
         101, 102, 103, 104, 5, 6, 7, 8, 9, 10

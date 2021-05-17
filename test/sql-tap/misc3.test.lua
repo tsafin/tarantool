@@ -510,7 +510,7 @@ test:do_execsql_test(
 test:do_execsql_test(
     "misc-8.2",
     [[
-        SELECT count(*) FROM t3 WHERE 1+CAST((b IN ('abc','xyz')) AS INTEGER)==2
+        SELECT count(*) FROM t3 WHERE b IN ('abc','xyz')
     ]], {
         -- <misc-8.2>
         2
