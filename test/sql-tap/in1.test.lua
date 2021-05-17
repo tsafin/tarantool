@@ -97,13 +97,13 @@ test:do_execsql_test(
         -- </in-1.6>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "in-1.7",
     [[
         SELECT a+ 100*CAST((a BETWEEN 1 and 3) AS INTEGER) FROM t1 ORDER BY b
     ]], {
         -- <in-1.7>
-        101, 102, 103, 4, 5, 6, 7, 8, 9, 10
+        1, "Type mismatch: can not convert TRUE to integer"
         -- </in-1.7>
     })
 
@@ -154,13 +154,13 @@ test:do_execsql_test(
         -- </in-2.4>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "in-2.5",
     [[
         SELECT a+100*(CAST(b IN (8,16,24) AS INTEGER)) FROM t1 ORDER BY b
     ]], {
         -- <in-2.5>
-        1, 2, 103, 104, 5, 6, 7, 8, 9, 10
+        1, "Type mismatch: can not convert FALSE to integer"
         -- </in-2.5>
     })
 
@@ -204,13 +204,13 @@ test:do_execsql_test(
         -- </in-2.9>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "in-2.10",
     [[
         SELECT a FROM t1 WHERE LEAST(0, CAST(b IN (a,30) AS INT)) <> 0
     ]], {
         -- <in-2.10>
-
+        1, "Type mismatch: can not convert FALSE to integer"
         -- </in-2.10>
     })
 
@@ -250,13 +250,13 @@ test:do_execsql_test(
         -- </in-3.2>
     })
 
-test:do_execsql_test(
+test:do_catchsql_test(
     "in-3.3",
     [[
         SELECT a + 100*(CAST(b IN (SELECT b FROM t1 WHERE a<5) AS INTEGER)) FROM t1 ORDER BY b
     ]], {
         -- <in-3.3>
-        101, 102, 103, 104, 5, 6, 7, 8, 9, 10
+        1, "Type mismatch: can not convert TRUE to integer"
         -- </in-3.3>
     })
 

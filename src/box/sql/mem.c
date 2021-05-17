@@ -527,15 +527,6 @@ int_to_str0(struct Mem *mem)
 }
 
 static inline int
-int_to_bool(struct Mem *mem)
-{
-	mem->u.b = mem->u.i != 0;
-	mem->flags = MEM_Bool;
-	mem->field_type = FIELD_TYPE_BOOLEAN;
-	return 0;
-}
-
-static inline int
 str_to_str0(struct Mem *mem)
 {
 	assert((mem->flags | MEM_Str) != 0);
@@ -718,24 +709,6 @@ double_to_str0(struct Mem *mem)
 }
 
 static inline int
-double_to_bool(struct Mem *mem)
-{
-	mem->u.b = mem->u.r != 0.;
-	mem->flags = MEM_Bool;
-	mem->field_type = FIELD_TYPE_BOOLEAN;
-	return 0;
-}
-
-static inline int
-bool_to_int(struct Mem *mem)
-{
-	mem->u.u = (uint64_t)mem->u.b;
-	mem->flags = MEM_UInt;
-	mem->field_type = FIELD_TYPE_UNSIGNED;
-	return 0;
-}
-
-static inline int
 bool_to_str0(struct Mem *mem)
 {
 	const char *str = mem->u.b ? "TRUE" : "FALSE";
@@ -766,8 +739,6 @@ mem_to_int(struct Mem *mem)
 		return bytes_to_int(mem);
 	if ((mem->flags & MEM_Real) != 0)
 		return double_to_int(mem);
-	if ((mem->flags & MEM_Bool) != 0)
-		return bool_to_int(mem);
 	return -1;
 }
 
@@ -803,8 +774,6 @@ mem_to_number(struct Mem *mem)
 	assert((mem->flags & MEM_PURE_TYPE_MASK) != 0);
 	if ((mem->flags & (MEM_Int | MEM_UInt | MEM_Real)) != 0)
 		return 0;
-	if ((mem->flags & MEM_Bool) != 0)
-		return bool_to_int(mem);
 	if ((mem->flags & (MEM_Str | MEM_Blob)) != 0) {
 		if (bytes_to_int(mem) == 0)
 			return 0;
@@ -879,8 +848,6 @@ mem_cast_explicit(struct Mem *mem, enum field_type type)
 			return bytes_to_uint(mem);
 		if ((mem->flags & MEM_Real) != 0)
 			return double_to_int(mem);
-		if ((mem->flags & MEM_Bool) != 0)
-			return bool_to_int(mem);
 		return -1;
 	case FIELD_TYPE_STRING:
 		return mem_to_str(mem);
@@ -891,12 +858,8 @@ mem_cast_explicit(struct Mem *mem, enum field_type type)
 	case FIELD_TYPE_BOOLEAN:
 		if ((mem->flags & MEM_Bool) != 0)
 			return 0;
-		if ((mem->flags & (MEM_UInt | MEM_Int)) != 0)
-			return int_to_bool(mem);
 		if ((mem->flags & MEM_Str) != 0)
 			return str_to_bool(mem);
-		if ((mem->flags & MEM_Real) != 0)
-			return double_to_bool(mem);
 		return -1;
 	case FIELD_TYPE_VARBINARY:
 		if ((mem->flags & MEM_Blob) != 0)
