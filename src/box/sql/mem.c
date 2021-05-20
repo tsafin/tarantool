@@ -927,6 +927,8 @@ mem_cast_explicit(struct Mem *mem, enum field_type type)
 		if ((mem->type & (MEM_TYPE_MAP | MEM_TYPE_ARRAY)) != 0)
 			return -1;
 		return 0;
+	case FIELD_TYPE_ANY:
+		return 0;
 	default:
 		break;
 	}
