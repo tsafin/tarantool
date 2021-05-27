@@ -2,7 +2,7 @@
 local tap = require("tap")
 local test = tap.test("errno")
 
-test:plan(1)
+test:plan(3)
 
 local yaml = require("yaml")
 local ffi = require("ffi")
@@ -137,6 +137,22 @@ local explicit_casts_table_spec = {
     [t_scalar] =  {"Y", "S", "Y", "S", "S", "S", "S", "S", "S", "S", "" , "" , "Y"},
 }
 
+local implicit_casts_table_spec = {
+    [t_any] =     {"Y", "S", "S", "S", "S", "S", "S", "S", "S", "S", "S", "S", "S"},
+    [t_unsigned]= {"Y", "Y", "Y", "Y", "Y", "" , "" , "Y", "Y", "" , "" , "" , "Y"},
+    [t_string] =  {"Y", "S", "Y", "S", "S", "" , "Y", "S", "S", "S", "" , "" , "Y"},
+    [t_double] =  {"Y", "S", "Y", "Y", "S", "" , "" , "Y", "Y", "" , "" , "" , "Y"},
+    [t_integer] = {"Y", "S", "Y", "Y", "Y", "" , "" , "Y", "Y", "" , "" , "" , "Y"},
+    [t_boolean] = {"Y", "" , "" , "" , "" , "Y", "" , "" , "" , "" , "" , "" , "Y"},
+    [t_varbinary]={"Y", "" , "Y", "" , "" , "" , "Y", "" , "" , "S", "" , "" , "Y"},
+    [t_number] =  {"Y", "S", "Y", "Y", "S", "" , "" , "Y", "Y", "" , "" , "" , "Y"},
+    [t_decimal] = {"Y", "S", "Y", "S", "S", "" , "" , "Y", "Y", "" , "" , "" , "Y"},
+    [t_uuid] =    {"Y", "" , "Y", "" , "" , "" , "Y", "" , "" , "Y", "" , "" , "Y"},
+    [t_array] =   {"Y", "" , "" , "" , "" , "" , "" , "" , "" , "" , "Y", "" , "" },
+    [t_map] =     {"Y", "" , "" , "" , "" , "" , "" , "" , "" , "" , "" , "Y", "" },
+    [t_scalar] =  {"Y", "S", "S", "S", "S", "S", "S", "S", "S", "S", "" , "" , "S"},
+}
+
 local c_no = 0
 local c_maybe = 1
 local c_yes = 2
@@ -207,9 +223,31 @@ local function show_casts_table(table)
 end
 
 local explicit_casts = load_casts_spec(explicit_casts_table_spec, enabled_type, enabled_type_cast)
+local implicit_casts = load_casts_spec(implicit_casts_table_spec, enabled_type, enabled_type)
 
 if verbose > 0 then
     show_casts_table(explicit_casts)
+    show_casts_table(implicit_casts)
+end
+
+-- 0. check consistency of input conversion table
+
+-- implicit conversion table is considered consistent if
+-- it's sort of symmetric against diagonal
+-- (not necessary that always/sometimes are matching
+-- but at least something should be presented)
+local function test_check_table_consistency(test)
+    test:plan(169)
+    for _, from in ipairs(proper_order) do
+        for _, to in ipairs(proper_order) do
+            test:ok((normalize_cast(implicit_casts[from][to]) ~= c_no) ==
+                    (normalize_cast(implicit_casts[to][from]) ~= c_no),
+                    label_for(from, to,
+                              string.format("%s ~= %s",
+                                            implicit_casts[from][to],
+                                            implicit_casts[to][from])))
+        end
+    end
 end
 
 local function merge_tables(...)
@@ -334,7 +372,103 @@ local function test_check_explicit_casts(test)
     end
 end
 
+local table_name = 'TCASTS'
+
+local function _created_formatted_space(name)
+    local space = box.schema.space.create(name)
+    space:create_index('pk', {sequence = true})
+    local format = {{name = 'ID', type = 'unsigned', is_nullable = false}}
+    for _, type_id in ipairs(proper_order) do
+        if enabled_type[type_id] then
+            local type_name = type_names[type_id]
+            table.insert(format, {name = type_name, type = type_name, is_nullable = true})
+        end
+    end
+    if #format > 0 then
+        space:format(format)
+    end
+    return space
+end
+
+local function _cleanup_space(space)
+    space:drop()
+end
+
+-- implicit
+local function gen_implicit_insert_from_to(table_name, from, to)
+    local queries = {}
+    local from_exprs = gen_type_exprs(from)
+    for _, from_e in pairs(from_exprs) do
+        table.insert(queries,
+                        string.format([[ insert into %s("%s") values(%s); ]],
+                                      table_name, type_names[to], from_e))
+    end
+    return queries
+end
+
+
+-- 2. Check implicit casts table
+local function test_check_implicit_casts(test)
+    test:plan(186)
+    local space = _created_formatted_space(table_name)
+    -- checking validity of all `from binop to` combinations
+    for _, from in ipairs(proper_order) do
+        for _, to in ipairs(proper_order) do
+            -- skip ANY, DECIMAL, UUID, etc.
+            if enabled_type[from] and enabled_type[to] then
+                local gen = gen_implicit_insert_from_to(table_name, from, to)
+                local failures = {}
+                local successes = {}
+                local castable = false
+                local expected = implicit_casts[from][to]
+
+                if verbose > 0 then
+                    print(expected, yaml.encode(gen))
+                end
+
+                for _, v in pairs(gen) do
+                    local ok, result
+                    ok, result = catch_query(v)
+
+                    if verbose > 0 then
+                        print(string.format("V> ok = %s, result = %s, query = %s",
+                            ok, result, v))
+                    end
+
+                    local title  = string.format("%s => %s", v, human_cast(expected))
+                    if expected == c_yes then
+                        test:ok(true == ok, label_for(from, to, title))
+                    elseif expected == c_no then
+                        test:ok(false == ok, label_for(from, to, title))
+                    else
+                        -- we can't report immediately for c_maybe because some
+                        -- cases allowed to fail, so postpone decision
+                        if ok then
+                            castable = true
+                            table.insert(successes, {result, v})
+                        else
+                            table.insert(failures, {result, v})
+                        end
+                    end
+                end
+
+                -- ok, we aggregated stats for c_maybe mode - check it now
+                if expected == c_maybe then
+                        local title  = string.format("%s => %s",
+                                                    #gen and gen[1]..'...' or '',
+                                                    human_cast(expected))
+                        test:ok(castable, label_for(from, to, title),
+                                failures)
+                end
+            end
+        end
+    end
+    _cleanup_space(space)
+end
+
+test:test("e_casts - check consistency of implicit conversion table", test_check_table_consistency)
 test:test("e_casts - check explicit casts", test_check_explicit_casts)
+test:test("e_casts - check implicit casts", test_check_implicit_casts)
 
 test:check()
 os.exit()

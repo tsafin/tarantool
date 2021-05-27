@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 local test = require("sqltester")
-test:plan(52)
+test:plan(53)
 
 --!./tcltestrunner.lua
 -- 2008 September 1
@@ -128,13 +128,24 @@ test:do_execsql_test(
     })
 
 test:do_execsql_test(
-    "in4-2.6",
+    "in4-2.6.0",
     [[
-        SELECT b FROM t2 WHERE a IN (1.0, 2.1)
+        SELECT b FROM t2 WHERE a IN (1.0, 2.0)
     ]], {
         -- <in4-2.6>
         "one", "two"
         -- </in4-2.6>
+    })
+
+-- FIXME - IN [2.1] should convert to expected type of a
+test:do_execsql_test(
+    "in4-2.6.1",
+    [[
+        SELECT b FROM t2 WHERE a IN (1.0, 2.1)
+    ]], {
+        -- <in4-2.6.1>
+        "one"
+        -- </in4-2.6.1>
     })
 
 test:do_execsql_test(

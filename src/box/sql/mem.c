@@ -1033,28 +1033,40 @@ mem_cast_implicit(struct Mem *mem, enum field_type type)
 	}
 	switch (type) {
 	case FIELD_TYPE_UNSIGNED:
-		if (mem->type == MEM_TYPE_UINT)
+		if ((mem->type & (MEM_TYPE_INT | MEM_TYPE_UINT)) != 0)
 			return 0;
 		if (mem->type == MEM_TYPE_DOUBLE)
-			return double_to_uint(mem);
+			return double_to_uint_precise(mem);
+		if (mem->type == MEM_TYPE_STR)
+			return bytes_to_uint(mem);
 		return -1;
 	case FIELD_TYPE_STRING:
 		if (mem->type == MEM_TYPE_STR)
 			return 0;
 		if (mem->type == MEM_TYPE_UUID)
 			return uuid_to_str0(mem);
+		if ((mem->type & (MEM_TYPE_INT | MEM_TYPE_UINT)) != 0)
+			return int_to_str0(mem);
+		if (mem->type == MEM_TYPE_DOUBLE)
+			return double_to_str0(mem);
+		if (mem->type == MEM_TYPE_BIN)
+			return bin_to_str(mem);
 		return -1;
 	case FIELD_TYPE_DOUBLE:
 		if (mem->type == MEM_TYPE_DOUBLE)
 			return 0;
 		if ((mem->type & (MEM_TYPE_INT | MEM_TYPE_UINT)) != 0)
 			return int_to_double(mem);
+		if (mem->type == MEM_TYPE_STR)
+			return bytes_to_double(mem);
 		return -1;
 	case FIELD_TYPE_INTEGER:
 		if ((mem->type & (MEM_TYPE_INT | MEM_TYPE_UINT)) != 0)
 			return 0;
 		if (mem->type == MEM_TYPE_DOUBLE)
-			return double_to_int(mem);
+			return double_to_int_precise(mem);
+		if (mem->type == MEM_TYPE_STR)
+			return bytes_to_int(mem);
 		return -1;
 	case FIELD_TYPE_BOOLEAN:
 		if (mem->type == MEM_TYPE_BOOL)
@@ -1066,17 +1078,21 @@ mem_cast_implicit(struct Mem *mem, enum field_type type)
 			return 0;
 		if (mem->type == MEM_TYPE_UUID)
 			return uuid_to_bin(mem);
+		if (mem->type == MEM_TYPE_STR)
+			return str_to_bin(mem);
 		return -1;
 	case FIELD_TYPE_NUMBER:
 		if (mem_is_num(mem))
 			return 0;
+		if (mem->type == MEM_TYPE_STR)
+			return mem_to_number(mem);
 		return -1;
 	case FIELD_TYPE_MAP:
-		if (mem->type == MEM_TYPE_MAP)
+		if (mem_is_map(mem))
 			return 0;
 		return -1;
 	case FIELD_TYPE_ARRAY:
-		if (mem->type == MEM_TYPE_ARRAY)
+		if (mem_is_array(mem))
 			return 0;
 		return -1;
 	case FIELD_TYPE_SCALAR:
@@ -1093,88 +1109,6 @@ mem_cast_implicit(struct Mem *mem, enum field_type type)
 		return -1;
 	case FIELD_TYPE_ANY:
 		return 0;
-	default:
-		break;
-	}
-	return -1;
-}
-
-int
-mem_cast_implicit_old(struct Mem *mem, enum field_type type)
-{
-	if (mem->type == MEM_TYPE_NULL)
-		return 0;
-	switch (type) {
-	case FIELD_TYPE_UNSIGNED:
-		if (mem->type == MEM_TYPE_UINT)
-			return 0;
-		if (mem->type == MEM_TYPE_DOUBLE)
-			return double_to_uint_precise(mem);
-		if (mem->type == MEM_TYPE_STR)
-			return bytes_to_uint(mem);
-		return -1;
-	case FIELD_TYPE_STRING:
-		if ((mem->type & (MEM_TYPE_STR | MEM_TYPE_BIN)) != 0)
-			return 0;
-		if ((mem->type & (MEM_TYPE_INT | MEM_TYPE_UINT)) != 0)
-			return int_to_str0(mem);
-		if (mem->type == MEM_TYPE_DOUBLE)
-			return double_to_str0(mem);
-		if (mem->type == MEM_TYPE_UUID)
-			return uuid_to_str0(mem);
-		return -1;
-	case FIELD_TYPE_DOUBLE:
-		if (mem->type == MEM_TYPE_DOUBLE)
-			return 0;
-		if ((mem->type & (MEM_TYPE_INT | MEM_TYPE_UINT)) != 0)
-			return int_to_double(mem);
-		if (mem->type == MEM_TYPE_STR)
-			return bin_to_str(mem);
-		return -1;
-	case FIELD_TYPE_INTEGER:
-		if ((mem->type & (MEM_TYPE_INT | MEM_TYPE_UINT)) != 0)
-			return 0;
-		if (mem->type == MEM_TYPE_STR)
-			return bytes_to_int(mem);
-		if (mem->type == MEM_TYPE_DOUBLE)
-			return double_to_int_precise(mem);
-		return -1;
-	case FIELD_TYPE_BOOLEAN:
-		if (mem->type == MEM_TYPE_BOOL)
-			return 0;
-		return -1;
-	case FIELD_TYPE_VARBINARY:
-		if (mem->type == MEM_TYPE_BIN)
-			return 0;
-		if (mem->type == MEM_TYPE_UUID)
-			return uuid_to_bin(mem);
-		return -1;
-	case FIELD_TYPE_NUMBER:
-		if (mem_is_num(mem))
-			return 0;
-		if (mem->type == MEM_TYPE_STR)
-			return mem_to_number(mem);
-		return -1;
-	case FIELD_TYPE_MAP:
-		if (mem->type == MEM_TYPE_MAP)
-			return 0;
-		return -1;
-	case FIELD_TYPE_ARRAY:
-		if (mem->type == MEM_TYPE_ARRAY)
-			return 0;
-		return -1;
-	case FIELD_TYPE_SCALAR:
-		if ((mem->type & (MEM_TYPE_MAP | MEM_TYPE_ARRAY)) != 0)
-			return -1;
-		return 0;
-	case FIELD_TYPE_UUID:
-		if (mem->type == MEM_TYPE_UUID)
-			return 0;
-		if (mem->type == MEM_TYPE_STR)
-			return str_to_uuid(mem);
-		if (mem->type == MEM_TYPE_BIN)
-			return bin_to_uuid(mem);
-		return -1;
 	default:
 		break;
 	}
@@ -1460,7 +1394,7 @@ get_number(const struct Mem *mem, struct sql_num *number)
 	if (mem->type == MEM_TYPE_INT) {
 		number->i = mem->u.i;
 		number->type = MEM_TYPE_INT;
-		number->is_neg = true;
+		number->is_neg = mem->u.i < 0;
 		return 0;
 	}
 	if (mem->type == MEM_TYPE_UINT) {
@@ -1473,13 +1407,6 @@ get_number(const struct Mem *mem, struct sql_num *number)
 		return -1;
 	if (sql_atoi64(mem->z, &number->i, &number->is_neg, mem->n) == 0) {
 		number->type = number->is_neg ? MEM_TYPE_INT : MEM_TYPE_UINT;
-		/*
-		 * The next line should be removed along with the is_neg field
-		 * of struct sql_num. The integer type tells us about the sign.
-		 * However, if it is removed, the behavior of arithmetic
-		 * operations will change.
-		 */
-		number->is_neg = false;
 		return 0;
 	}
 	if (sqlAtoF(mem->z, &number->d, mem->n) != 0) {

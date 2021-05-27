@@ -754,12 +754,6 @@ int
 mem_cast_implicit(struct Mem *mem, enum field_type type);
 
 /**
- * Convert the given MEM to given type according to legacy implicit cast rules.
- */
-int
-mem_cast_implicit_old(struct Mem *mem, enum field_type type);
-
-/**
  * Return value for MEM of INTEGER type. For MEM of all other types convert
  * value of the MEM to INTEGER if possible and return converted value. Original
  * MEM is not changed.

@@ -1660,7 +1660,7 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 	} else if (type == FIELD_TYPE_STRING) {
 		if (mem_cmp_str(pIn3, pIn1, &res, pOp->p4.pColl) != 0) {
 			const char *str =
-				mem_cast_implicit_old(pIn3, type) != 0 ?
+				mem_cast_implicit(pIn3, type) != 0 ?
 				mem_str(pIn3) : mem_str(pIn1);
 			diag_set(ClientError, ER_SQL_TYPE_MISMATCH, str,
 				 "string");
@@ -1671,7 +1671,7 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 		type = FIELD_TYPE_NUMBER;
 		if (mem_cmp_num(pIn3, pIn1, &res) != 0) {
 			const char *str =
-				mem_cast_implicit_old(pIn3, type) != 0 ?
+				mem_cast_implicit(pIn3, type) != 0 ?
 				mem_str(pIn3) : mem_str(pIn1);
 			diag_set(ClientError, ER_SQL_TYPE_MISMATCH, str,
 				 "numeric");
@@ -1682,7 +1682,7 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 		assert(mem_is_str(pIn3) && mem_is_same_type(pIn3, pIn1));
 		if (mem_cmp_str(pIn3, pIn1, &res, pOp->p4.pColl) != 0) {
 			const char *str =
-				mem_cast_implicit_old(pIn3, type) != 0 ?
+				mem_cast_implicit(pIn3, type) != 0 ?
 				mem_str(pIn3) : mem_str(pIn1);
 			diag_set(ClientError, ER_SQL_TYPE_MISMATCH, str,
 				 "string");
@@ -2218,7 +2218,7 @@ case OP_MakeRecord: {
 	if (types != NULL) {
 		pRec = pData0;
 		do {
-			mem_cast_implicit_old(pRec++, *(types++));
+			mem_cast_implicit(pRec++, *(types++));
 		} while(types[0] != field_type_MAX);
 	}
 

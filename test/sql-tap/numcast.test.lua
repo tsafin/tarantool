@@ -139,7 +139,7 @@ test:do_catchsql_test(
 test:do_execsql_test(
     "cast-2.9",
     [[
-        INSERT INTO t VALUES(2.1);
+        INSERT INTO t VALUES(2.0);
         SELECT * FROM t;
     ]], {
         2, 9223372036854775808ULL, 18000000000000000000ULL

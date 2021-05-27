@@ -958,9 +958,8 @@ sql_add_int(int64_t lhs, bool is_lhs_neg, int64_t rhs, bool is_rhs_neg,
 		*res = lhs + rhs;
 		return 0;
 	}
-	*is_res_neg = is_rhs_neg ? (uint64_t)(-rhs) > (uint64_t) lhs :
-				   (uint64_t)(-lhs) > (uint64_t) rhs;
 	*res = lhs + rhs;
+	*is_res_neg = *res < 0;
 	return 0;
 }
 
