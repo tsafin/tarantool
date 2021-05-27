@@ -372,7 +372,8 @@ box.execute("SELECT a FROM t1 WHERE a IN (1.1, 2.1);")
 - metadata:
   - name: A
     type: integer
-  rows: []
+  rows:
+  - [1]
 ...
 box.execute("SELECT a FROM t1 WHERE a = 1.1;")
 ---
@@ -471,7 +472,8 @@ box.execute("SELECT a FROM t1 WHERE a IN (1.1, 2.1);")
 - metadata:
   - name: A
     type: unsigned
-  rows: []
+  rows:
+  - [1]
 ...
 s:drop()
 ---
@@ -2349,7 +2351,8 @@ box.execute([[INSERT INTO tt(t) VALUES ('33');]])
 box.execute([[INSERT INTO tt(t) VALUES (X'3434');]])
 ---
 - null
-- 'Type mismatch: can not convert varbinary to string'
+- 'Tuple field 2 (T) type does not match one required by operation: expected string,
+  got blob'
 ...
 box.execute([[SELECT * FROM tt;]])
 ---
@@ -2682,7 +2685,8 @@ box.execute([[UPDATE tt SET t = '33' WHERE a = 1;]])
 box.execute([[UPDATE tt SET t = X'3434' WHERE a = 1;]])
 ---
 - null
-- 'Type mismatch: can not convert varbinary to string'
+- 'Tuple field 2 (T) type does not match one required by operation: expected string,
+  got blob'
 ...
 box.execute([[SELECT * FROM tt;]])
 ---
