@@ -23,7 +23,7 @@ local function traceback(level)
         local frame = {
             source = info.source;
             src = info.short_src;
-            line = info.linedefined or 0;
+            line = info.currentline or info.linedefined or 0;
             what = info.what;
             name = info.name;
             namewhat = info.namewhat;
