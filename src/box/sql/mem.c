@@ -776,12 +776,33 @@ map_to_str0(struct Mem *mem)
 }
 
 int
+mem_to_uint(struct Mem *mem)
+{
+	assert(mem->type < MEM_TYPE_INVALID);
+	if (mem->type == MEM_TYPE_UINT)
+		return 0;
+	if (mem->type == MEM_TYPE_INT) {
+		mem_set_uint(mem, (uint64_t)mem->u.i);
+		return 0;
+	}
+	if ((mem->type == (MEM_TYPE_STR | MEM_TYPE_BIN)) != 0)
+		return bytes_to_uint(mem);
+	if (mem->type == MEM_TYPE_DOUBLE)
+		return double_to_uint(mem);
+	return -1;
+}
+
+int
 mem_to_int(struct Mem *mem)
 {
 	assert(mem->type < MEM_TYPE_INVALID);
-	if ((mem->type & (MEM_TYPE_INT | MEM_TYPE_UINT)) != 0)
+	if (mem->type == MEM_TYPE_INT)
 		return 0;
-	if ((mem->type & (MEM_TYPE_STR | MEM_TYPE_BIN)) != 0)
+	if (mem->type == MEM_TYPE_UINT) {
+		mem_set_int(mem, (int64_t)mem->u.u, false);
+		return 0;
+	}
+	if ((mem->type == (MEM_TYPE_STR | MEM_TYPE_BIN)) != 0)
 		return bytes_to_int(mem);
 	if (mem->type == MEM_TYPE_DOUBLE)
 		return double_to_int(mem);
@@ -889,17 +910,7 @@ mem_cast_explicit(struct Mem *mem, enum field_type type)
 	}
 	switch (type) {
 	case FIELD_TYPE_UNSIGNED:
-		switch (mem->type) {
-		case MEM_TYPE_UINT:
-			return 0;
-		case MEM_TYPE_STR:
-		case MEM_TYPE_BIN:
-			return bytes_to_uint(mem);
-		case MEM_TYPE_DOUBLE:
-			return double_to_int(mem);
-		default:
-			return -1;
-		}
+		return mem_to_uint(mem);
 	case FIELD_TYPE_STRING:
 		return mem_to_str(mem);
 	case FIELD_TYPE_DOUBLE:

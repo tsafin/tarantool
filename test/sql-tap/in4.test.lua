@@ -133,7 +133,7 @@ test:do_execsql_test(
         SELECT b FROM t2 WHERE a IN (1.0, 2.1)
     ]], {
         -- <in4-2.6>
-        "one"
+        "one", "two"
         -- </in4-2.6>
     })
 
