@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 local test = require("sqltester")
-test:plan(222)
+test:plan(391)
 
 local yaml = require("yaml")
 local ffi = require("ffi")
@@ -131,34 +131,24 @@ local explicit_casts_table_spec = {
     [t_scalar] =  {"Y", "S", "Y", "S", "S", "S", "S", "S", "S", "S", "" , "" , "Y"},
 }
 
--- local extra_checks = false
+local implicit_casts_table_spec = {
+    [t_any] =     {"Y", "S", "S", "S", "S", "S", "S", "S", "S", "S", "S", "S", "S"},
+    [t_unsigned]= {"Y", "Y", "Y", "Y", "Y", "" , "" , "Y", "Y", "" , "" , "" , "Y"},
+    [t_string] =  {"Y", "S", "Y", "S", "S", "" , "Y", "S", "S", "S", "" , "" , "Y"},
+    [t_double] =  {"Y", "S", "Y", "Y", "S", "" , "" , "Y", "Y", "" , "" , "" , "Y"},
+    [t_integer] = {"Y", "S", "Y", "Y", "Y", "" , "" , "Y", "Y", "" , "" , "" , "Y"},
+    [t_boolean] = {"Y", "" , "" , "" , "" , "Y", "" , "" , "" , "" , "" , "" , "Y"},
+    [t_varbinary]={"Y", "" , "Y", "" , "" , "" , "Y", "" , "" , "S", "" , "" , "Y"},
+    [t_number] =  {"Y", "S", "Y", "Y", "S", "" , "" , "Y", "Y", "" , "" , "" , "Y"},
+    [t_decimal] = {"Y", "S", "Y", "S", "S", "" , "" , "Y", "Y", "" , "" , "" , "Y"},
+    [t_uuid] =    {"Y", "" , "Y", "" , "" , "" , "Y", "" , "" , "Y", "" , "" , "Y"},
+    [t_array] =   {"Y", "" , "" , "" , "" , "" , "" , "" , "" , "" , "Y", "" , "" },
+    [t_map] =     {"Y", "" , "" , "" , "" , "" , "" , "" , "" , "" , "" , "Y", "" },
+    [t_scalar] =  {"Y", "S", "S", "S", "S", "S", "S", "S", "S", "S", "" , "" , "Y"},
+}
+
 local explicit_casts = {}
--- local implicit_casts = {}
-
--- implicit conversion table is considered consistent if
--- it's sort of symmetric against diagonal
--- (not necessary that always/sometimes are matching
--- but at least something should be presented)
-
---[[ local function check_table_consistency(table)
-    for _, i in ipairs(proper_order) do
-        local string = ''
-        for _, j in ipairs(proper_order) do
-            print(i, j)
-            -- local item = implicit_casts[i][j]
-            -- string = string .. (xlat[item] or ' ')
-        end
-        print(string)
-    end
-end
-]]
-
-    -- if there is enabled extra checks then check ocnsistency of input tables
-    -- just to make sure their sanity
---[[     if extra_checks then
-        check_table_consistency()
-    end
- ]]
+local implicit_casts = {}
 
 local c_no = 0
 local c_maybe = 1
@@ -202,37 +192,70 @@ local function load_casts_spec(spec_table)
     return casts
 end
 
+local function label_for(from, to, title)
+    local parent_frame = debug.getinfo(2, "nSl")
+    local filename = parent_frame.source:sub(1,1) == "@" and parent_frame.source:sub(2)
+    local line = parent_frame.currentline
+    return string.format("%s:%d [%s,%s] %s", filename, line,
+                         type_names[from], type_names[to], title)
+end
+
+local function show_casts_table(table)
+    local max_len = #"12. varbinary" + 1
+
+    -- show banner
+    local col_names = ''
+    for i, t_val in ipairs(proper_order) do
+        col_names = col_names .. string.format("%2d |", t_val)
+    end
+    col_names = string.sub(col_names, 1, #col_names-1)
+    print(string.format("%"..max_len.."s|%s|", "", col_names))
+    -- show splitter
+    local banner = '+---+---+---+---+---+---+---+---+---+---+---+---+---+'
+    print(string.format("%"..max_len.."s%s", "", banner))
+
+    for i, from in ipairs(proper_order) do
+        local line = ''
+        for j, to in ipairs(proper_order) do
+            line = line .. string.format("%2s |", human_cast(table[from][to]))
+        end
+        line = string.sub(line, 1, #line-1)
+        local s = string.format("%2d.%10s |%s|", from, type_names[from], line)
+        print(s)
+    end
+    print(string.format("%"..max_len.."s%s", "", banner))
+end
+
+
+local function check_table_consistency(table)
+end
+
+
 explicit_casts = load_casts_spec(explicit_casts_table_spec)
+implicit_casts = load_casts_spec(implicit_casts_table_spec)
 
 if verbose > 0 then
-    local function show_casts_table(table)
-        local max_len = #"12. varbinary" + 1
-
-        -- show banner
-        local col_names = ''
-        for i, t_val in ipairs(proper_order) do
-            col_names = col_names .. string.format("%2d |", t_val)
-        end
-        col_names = string.sub(col_names, 1, #col_names-1)
-        print(string.format("%"..max_len.."s|%s|", "", col_names))
-        -- show splitter
-        local banner = '+---+---+---+---+---+---+---+---+---+---+---+---+---+'
-        print(string.format("%"..max_len.."s%s", "", banner))
-
-        for i, from in ipairs(proper_order) do
-            local line = ''
-            for j, to in ipairs(proper_order) do
-                line = line .. string.format("%2s |", human_cast(table[from][to]))
-            end
-            line = string.sub(line, 1, #line-1)
-            local s = string.format("%2d.%10s |%s|", from, type_names[from], line)
-            print(s)
-        end
-        print(string.format("%"..max_len.."s%s", "", banner))
-    end
-
     show_casts_table(explicit_casts)
+    show_casts_table(implicit_casts)
 end
+
+-- implicit conversion table is considered consistent if
+-- it's sort of symmetric against diagonal
+-- (not necessary that always/sometimes are matching
+-- but at least something should be presented)
+for i, from in ipairs(proper_order) do
+    for j, to in ipairs(proper_order) do
+        -- if enabled_type[from] and enabled_type[to] then
+            test:ok((normalize_cast(implicit_casts[from][to]) ~= c_no) ==
+                    (normalize_cast(implicit_casts[to][from]) ~= c_no),
+                    label_for(from, to, 
+                                string.format("%s ~= %s", 
+                                            implicit_casts[from][to],
+                                            implicit_casts[to][from])))
+        -- end
+    end
+end
+
 
 local function merge_tables(...)
     local n = select('#', ...)
@@ -294,14 +317,6 @@ local function catch_query(query)
         return false, result[3]
     end
     return true, result[2]
-end
-
-local function label_for(from, to, query)
-    local parent_frame = debug.getinfo(2, "nSl")
-    local filename = parent_frame.source:sub(1,1) == "@" and parent_frame.source:sub(2)
-    local line = parent_frame.currentline
-    return string.format("%s+%d:[%s,%s] %s", filename, line,
-                         type_names[from], type_names[to], query)
 end
 
 for i, from in ipairs(proper_order) do
