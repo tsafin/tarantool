@@ -1,6 +1,6 @@
 #!/usr/bin/env tarantool
 local test = require("sqltester")
-test:plan(2099)
+test:plan(3)
 
 local yaml = require("yaml")
 local ffi = require("ffi")
@@ -183,12 +183,6 @@ local function load_casts_spec(spec_table)
             end
         end
     end
-    -- if there is enabled extra checks then check ocnsistency of input tables
-    -- just to make sure their sanity
---[[     if extra_checks then
-        check_table_consistency()
-    end ]]
-
     return casts
 end
 
@@ -226,11 +220,6 @@ local function show_casts_table(table)
     print(string.format("%"..max_len.."s%s", "", banner))
 end
 
-
-local function check_table_consistency(table)
-end
-
-
 explicit_casts = load_casts_spec(explicit_casts_table_spec)
 implicit_casts = load_casts_spec(implicit_casts_table_spec)
 
@@ -239,23 +228,27 @@ if verbose > 0 then
     show_casts_table(implicit_casts)
 end
 
+-- 0. check consistency of input conversion table
+
 -- implicit conversion table is considered consistent if
 -- it's sort of symmetric against diagonal
 -- (not necessary that always/sometimes are matching
 -- but at least something should be presented)
-for i, from in ipairs(proper_order) do
-    for j, to in ipairs(proper_order) do
-        -- if enabled_type[from] and enabled_type[to] then
-            test:ok((normalize_cast(implicit_casts[from][to]) ~= c_no) ==
-                    (normalize_cast(implicit_casts[to][from]) ~= c_no),
-                    label_for(from, to, 
-                                string.format("%s ~= %s", 
-                                            implicit_casts[from][to],
-                                            implicit_casts[to][from])))
-        -- end
+local function test_check_table_consistency(test)
+    test:plan(169)
+    for i, from in ipairs(proper_order) do
+        for j, to in ipairs(proper_order) do
+            -- if enabled_type[from] and enabled_type[to] then
+                test:ok((normalize_cast(implicit_casts[from][to]) ~= c_no) ==
+                        (normalize_cast(implicit_casts[to][from]) ~= c_no),
+                        label_for(from, to, 
+                                    string.format("%s ~= %s", 
+                                                implicit_casts[from][to],
+                                                implicit_casts[to][from])))
+            -- end
+        end
     end
 end
-
 
 local function merge_tables(...)
     local n = select('#', ...)
@@ -311,21 +304,6 @@ local function gen_explicit_cast_from_to(t_from, t_to)
     return queries
 end
 
--- implicit
-local function gen_implicit_expr_from_to(t_from, t_to)
-    local queries = {}
-    local from_exprs = gen_type_exprs(t_from)
-    local to_exprs = gen_type_exprs(t_to)
-    for _, from_e in pairs(from_exprs) do
-        for _, to_e in pairs(to_exprs) do
-            table.insert(queries,
-                         string.format([[ select %s %s %s; ]], from_e, '+', to_e))
-        end
-    end
-    return queries
-end
-
-
 local function catch_query(query)
     local result = {pcall(box.execute, query)}
 
@@ -336,104 +314,150 @@ local function catch_query(query)
 end
 
 -- 1. Check explicit casts table
--- checking validity of all `CAST(from AS to)` combinations
-for i, from in ipairs(proper_order) do
-    for j, to in ipairs(proper_order) do
-        -- skip ANY, DECIMAL, UUID, etc.
-        if enabled_type[from] and enabled_type[to] then
-            local gen = gen_explicit_cast_from_to(from, to)
-            local failures = {}
-            local successes = {}
-            local castable = false
-            local expected = explicit_casts[from][to]
-
-            if verbose > 0 then
-                print(expected, yaml.encode(gen))
-            end
-
-            for i, v in pairs(gen) do
-                local ok, result
-                ok, result = catch_query(v)
+local function test_check_explicit_casts(test)
+    -- checking validity of all `CAST(from AS to)` combinations
+    test:plan(222)
+    for i, from in ipairs(proper_order) do
+        for j, to in ipairs(proper_order) do
+            -- skip ANY, DECIMAL, UUID, etc.
+            if enabled_type[from] and enabled_type[to] then
+                local gen = gen_explicit_cast_from_to(from, to)
+                local failures = {}
+                local successes = {}
+                local castable = false
+                local expected = explicit_casts[from][to]
 
                 if verbose > 0 then
-                    print(string.format("ok = %s, result = %s, query = %s",
-                         ok, result, v))
+                    print(expected, yaml.encode(gen))
                 end
 
-                if expected == c_yes then
-                    test:ok(true == ok, label_for(from, to, v))
-                elseif expected == c_no then
-                    test:ok(false == ok, label_for(from, to, v))
-                else
-                    -- we can't report immediately for c_maybe because some 
-                    -- cases allowed to fail, so postpone decision
-                    if ok then
-                        castable = true
-                        table.insert(successes, {result, v})
+                for _, v in pairs(gen) do
+                    local ok, result
+                    ok, result = catch_query(v)
+
+                    if verbose > 0 then
+                        print(string.format("ok = %s, result = %s, query = %s",
+                            ok, result, v))
+                    end
+
+                    if expected == c_yes then
+                        test:ok(true == ok, label_for(from, to, v))
+                    elseif expected == c_no then
+                        test:ok(false == ok, label_for(from, to, v))
                     else
-                        table.insert(failures, {result, v})
+                        -- we can't report immediately for c_maybe because some 
+                        -- cases allowed to fail, so postpone decision
+                        if ok then
+                            castable = true
+                            table.insert(successes, {result, v})
+                        else
+                            table.insert(failures, {result, v})
+                        end
                     end
                 end
-            end
 
-            -- ok, we aggregated stats for c_maybe mode - check it now
-            if expected == c_maybe then
-                    test:ok(castable, label_for(from, to, #gen and gen[1] or ''),
-                            failures)
+                -- ok, we aggregated stats for c_maybe mode - check it now
+                if expected == c_maybe then
+                        test:ok(castable, label_for(from, to, #gen and gen[1] or ''),
+                                failures)
+                end
             end
         end
     end
+end
+
+local table_name = 'TCASTS'
+
+local function _created_formatted_space(name)
+    local space = box.schema.space.create(name)
+    space:create_index('pk', {sequence = true})
+    local format = {{name = 'ID', type = 'unsigned', is_nullable = false}}
+    for _, type_id in ipairs(proper_order) do
+        if enabled_type[type_id] then
+            local type_name = type_names[type_id]
+            table.insert(format, {name = type_name, type = type_name, is_nullable = true})
+        end
+    end
+    if #format > 0 then
+        space:format(format)
+    end
+    return space
+end
+
+local function _cleanup_space(space)
+    space:drop()
+end
+
+-- implicit
+local function gen_implicit_insert_from_to(table_name, from, to)
+    local queries = {}
+    local from_exprs = gen_type_exprs(from)
+    for _, from_e in pairs(from_exprs) do
+        table.insert(queries,
+                        string.format([[ insert into %s("%s") values(%s); ]],
+                                      table_name, type_names[to], from_e))
+    end
+    return queries
 end
 
 
 -- 2. Check implicit casts table
--- checking validity of all `from binop to` combinations
-for i, from in ipairs(proper_order) do
-    for j, to in ipairs(proper_order) do
-        -- skip ANY, DECIMAL, UUID, etc.
-        if enabled_type[from] and enabled_type[to] then
-            local gen = gen_implicit_expr_from_to(from, to)
-            local failures = {}
-            local successes = {}
-            local castable = false
-            local expected = implicit_casts[from][to]
-
-            if verbose > 0 then
-                print(expected, yaml.encode(gen))
-            end
-
-            for i, v in pairs(gen) do
-                local ok, result
-                ok, result = catch_query(v)
+local function test_check_implicit_casts(test)
+    test:plan(167)
+    local space = _created_formatted_space(table_name)
+    -- checking validity of all `from binop to` combinations
+    for i, from in ipairs(proper_order) do
+        for j, to in ipairs(proper_order) do
+            -- skip ANY, DECIMAL, UUID, etc.
+            if enabled_type[from] and enabled_type[to] then
+                local gen = gen_implicit_insert_from_to(table_name, from, to)
+                local failures = {}
+                local successes = {}
+                local castable = false
+                local expected = implicit_casts[from][to]
 
                 if verbose > 0 then
-                    print(string.format("ok = %s, result = %s, query = %s",
-                         ok, result, v))
+                    print(expected, yaml.encode(gen))
                 end
 
-                if expected == c_yes then
-                    test:ok(true == ok, label_for(from, to, v))
-                elseif expected == c_no then
-                    test:ok(false == ok, label_for(from, to, v))
-                else
-                    -- we can't report immediately for c_maybe because some 
-                    -- cases allowed to fail, so postpone decision
-                    if ok then
-                        castable = true
-                        table.insert(successes, {result, v})
+                for _, v in pairs(gen) do
+                    local ok, result
+                    ok, result = catch_query(v)
+
+                    if verbose > 0 then
+                        print(string.format("ok = %s, result = %s, query = %s",
+                            ok, result, v))
+                    end
+
+                    if expected == c_yes then
+                        test:ok(true == ok, label_for(from, to, v))
+                    elseif expected == c_no then
+                        test:ok(false == ok, label_for(from, to, v))
                     else
-                        table.insert(failures, {result, v})
+                        -- we can't report immediately for c_maybe because some 
+                        -- cases allowed to fail, so postpone decision
+                        if ok then
+                            castable = true
+                            table.insert(successes, {result, v})
+                        else
+                            table.insert(failures, {result, v})
+                        end
                     end
                 end
-            end
 
-            -- ok, we aggregated stats for c_maybe mode - check it now
-            if expected == c_maybe then
-                    test:ok(castable, label_for(from, to, #gen and gen[1] or ''),
-                            failures)
+                -- ok, we aggregated stats for c_maybe mode - check it now
+                if expected == c_maybe then
+                        test:ok(castable, label_for(from, to, #gen and gen[1] or ''),
+                                failures)
+                end
             end
         end
     end
+    _cleanup_space(space)
 end
+
+test:test("e_casts - check consistency of implicit conversion table", test_check_table_consistency)
+test:test("e_casts - check explicit casts", test_check_explicit_casts)
+test:test("e_casts - check implicit casts", test_check_implicit_casts)
 
 test:finish_test()
