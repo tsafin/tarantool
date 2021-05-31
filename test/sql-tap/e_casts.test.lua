@@ -270,7 +270,7 @@ local gen_type_samples = {
         [t_unsigned]  = {"0", "1", "2"},
         [t_integer]   = {"-678", "-1", "0", "1", "2", "3", "678"},
         [t_double]    = {"0.0", "123.4", "-567.8"},
-        [t_string]    = {"''", "'1'", "'abc'", "'def'", "'TRUE'", "'FALSE'"},
+        [t_string]    = {"''", "'1'", "'123.4'", "'-1.5'", "'abc'", "'def'", "'TRUE'", "'FALSE'"},
         [t_boolean]   = {"false", "true", "null"},
         [t_varbinary] = {"X'312E3233'", "X'2D392E3837'", "X'302E30303031'"},
 }
@@ -316,7 +316,7 @@ end
 -- 1. Check explicit casts table
 local function test_check_explicit_casts(test)
     -- checking validity of all `CAST(from AS to)` combinations
-    test:plan(222)
+    test:plan(232)
     for i, from in ipairs(proper_order) do
         for j, to in ipairs(proper_order) do
             -- skip ANY, DECIMAL, UUID, etc.
@@ -336,7 +336,7 @@ local function test_check_explicit_casts(test)
                     ok, result = catch_query(v)
 
                     if verbose > 0 then
-                        print(string.format("ok = %s, result = %s, query = %s",
+                        print(string.format("V> ok = %s, result = %s, query = %s",
                             ok, result, v))
                     end
 
@@ -403,7 +403,7 @@ end
 
 -- 2. Check implicit casts table
 local function test_check_implicit_casts(test)
-    test:plan(167)
+    test:plan(173)
     local space = _created_formatted_space(table_name)
     -- checking validity of all `from binop to` combinations
     for i, from in ipairs(proper_order) do
@@ -425,7 +425,7 @@ local function test_check_implicit_casts(test)
                     ok, result = catch_query(v)
 
                     if verbose > 0 then
-                        print(string.format("ok = %s, result = %s, query = %s",
+                        print(string.format("V> ok = %s, result = %s, query = %s",
                             ok, result, v))
                     end
 

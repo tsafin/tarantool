@@ -955,26 +955,38 @@ mem_cast_implicit(struct Mem *mem, enum field_type type)
 	}
 	switch (type) {
 	case FIELD_TYPE_UNSIGNED:
-		if (mem->type == MEM_TYPE_UINT)
+		if ((mem->type & (MEM_TYPE_INT | MEM_TYPE_UINT)) != 0)
 			return 0;
 		if (mem->type == MEM_TYPE_DOUBLE)
-			return double_to_uint(mem);
+			return double_to_uint_precise(mem);
+		if (mem->type == MEM_TYPE_STR)
+			return bytes_to_uint(mem);
 		return -1;
 	case FIELD_TYPE_STRING:
-		if ((mem->type & (MEM_TYPE_STR | MEM_TYPE_BIN)) != 0)
+		if (mem->type == MEM_TYPE_STR)
 			return 0;
+		if ((mem->type & (MEM_TYPE_INT | MEM_TYPE_UINT)) != 0)
+			return int_to_str0(mem);
+		if (mem->type == MEM_TYPE_DOUBLE)
+			return double_to_str0(mem);
+		if (mem->type == MEM_TYPE_BIN)
+			return bin_to_str(mem);
 		return -1;
 	case FIELD_TYPE_DOUBLE:
 		if (mem->type == MEM_TYPE_DOUBLE)
 			return 0;
 		if ((mem->type & (MEM_TYPE_INT | MEM_TYPE_UINT)) != 0)
 			return int_to_double(mem);
+		if (mem->type == MEM_TYPE_STR)
+			return bytes_to_double(mem);
 		return -1;
 	case FIELD_TYPE_INTEGER:
 		if ((mem->type & (MEM_TYPE_INT | MEM_TYPE_UINT)) != 0)
 			return 0;
 		if (mem->type == MEM_TYPE_DOUBLE)
-			return double_to_int(mem);
+			return double_to_int_precise(mem);
+		if (mem->type == MEM_TYPE_STR)
+			return bytes_to_int(mem);
 		return -1;
 	case FIELD_TYPE_BOOLEAN:
 		if (mem->type == MEM_TYPE_BOOL)
@@ -984,6 +996,8 @@ mem_cast_implicit(struct Mem *mem, enum field_type type)
 		if ((mem->type & (MEM_TYPE_BIN | MEM_TYPE_MAP |
 				  MEM_TYPE_ARRAY)) != 0)
 			return 0;
+		if (mem->type == MEM_TYPE_STR)
+			return str_to_bin(mem);
 		return -1;
 	case FIELD_TYPE_NUMBER:
 		if (mem_is_num(mem))
