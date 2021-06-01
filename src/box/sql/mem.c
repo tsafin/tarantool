@@ -1304,7 +1304,7 @@ get_number(const struct Mem *mem, struct sql_num *number)
 	if (mem->type == MEM_TYPE_INT) {
 		number->i = mem->u.i;
 		number->type = MEM_TYPE_INT;
-		number->is_neg = true;
+		number->is_neg = mem->u.i < 0;
 		return 0;
 	}
 	if (mem->type == MEM_TYPE_UINT) {
@@ -1317,13 +1317,6 @@ get_number(const struct Mem *mem, struct sql_num *number)
 		return -1;
 	if (sql_atoi64(mem->z, &number->i, &number->is_neg, mem->n) == 0) {
 		number->type = number->is_neg ? MEM_TYPE_INT : MEM_TYPE_UINT;
-		/*
-		 * The next line should be removed along with the is_neg field
-		 * of struct sql_num. The integer type tells us about the sign.
-		 * However, if it is removed, the behavior of arithmetic
-		 * operations will change.
-		 */
-		number->is_neg = false;
 		return 0;
 	}
 	if (sqlAtoF(mem->z, &number->d, mem->n) != 0) {
