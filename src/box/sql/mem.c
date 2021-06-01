@@ -785,7 +785,7 @@ mem_to_uint(struct Mem *mem)
 		mem_set_uint(mem, (uint64_t)mem->u.i);
 		return 0;
 	}
-	if ((mem->type == (MEM_TYPE_STR | MEM_TYPE_BIN)) != 0)
+	if ((mem->type & (MEM_TYPE_STR | MEM_TYPE_BIN)) != 0)
 		return bytes_to_uint(mem);
 	if (mem->type == MEM_TYPE_DOUBLE)
 		return double_to_uint(mem);
@@ -802,7 +802,7 @@ mem_to_int(struct Mem *mem)
 		mem_set_int(mem, (int64_t)mem->u.u, false);
 		return 0;
 	}
-	if ((mem->type == (MEM_TYPE_STR | MEM_TYPE_BIN)) != 0)
+	if ((mem->type & (MEM_TYPE_STR | MEM_TYPE_BIN)) != 0)
 		return bytes_to_int(mem);
 	if (mem->type == MEM_TYPE_DOUBLE)
 		return double_to_int(mem);
