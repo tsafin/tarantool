@@ -57,6 +57,14 @@
 #include "box/sequence.h"
 #include "box/session_settings.h"
 
+/*
+ * We use computed-goto-based dispatch only within compilers supporting goto by
+ * pointer label.
+ */
+#ifdef HAVE_COMPUTED_GOTO
+#define SQL_USE_GOTO
+#endif	/* HAVE_COMPUTED_GOTO */
+
 #ifdef SQL_DEBUG
 
 /*
@@ -217,6 +225,77 @@ allocateCursor(
 		printf("REG[%d] = %s\n", R, mem_str(M));
 #else
 #  define REGISTER_TRACE(P,R,M)
+#endif
+
+#ifdef SQL_DEBUG
+
+/* The following function adds nothing to the actual
+ * functionality of the program. It is only here for
+ * testing and debugging. On the other hand, it does
+ * burn CPU cycles every time through the evaluator loop.
+ * Only allow tracing if SQL_DEBUG is defined.
+ */
+static void
+vdbe_trace(Vdbe *p, Op *pOrigOp, int rc, Mem *aMem)
+{
+	if ((p->sql_flags & SQL_VdbeTrace) != 0) {
+		u8 opProperty = sqlOpcodeProperty[pOrigOp->opcode];
+		if (rc != 0) {
+			printf("rc=%d\n", rc);
+		}
+		if ((opProperty & OPFLG_OUT2) != 0) {
+			REGISTER_TRACE(p, pOrigOp->p2,
+				       &aMem[pOrigOp->p2]);
+		}
+		if ((opProperty & OPFLG_OUT3) != 0) {
+			REGISTER_TRACE(p, pOrigOp->p3,
+				       &aMem[pOrigOp->p3]);
+		}
+	}
+}
+
+/* Tracing and checking on vdbe operands */
+static void
+check_vdbe_operands(Vdbe *p, Op *pOp, Op *aOp, Mem *aMem)
+{
+	if ((p->sql_flags & SQL_VdbeTrace) != 0)
+		sqlVdbePrintOp(stdout, (int)(pOp - aOp), pOp);
+	{
+		u8 opProperty = sqlOpcodeProperty[pOp->opcode];
+		if ((opProperty & OPFLG_IN1) != 0) {
+			assert(pOp->p1 > 0);
+			assert(pOp->p1 <= (p->nMem + 1 - p->nCursor));
+			assert(memIsValid(&aMem[pOp->p1]));
+			assert(sqlVdbeCheckMemInvariants(&aMem[pOp->p1]));
+			REGISTER_TRACE(p, pOp->p1, &aMem[pOp->p1]);
+		}
+		if ((opProperty & OPFLG_IN2) != 0) {
+			assert(pOp->p2 > 0);
+			assert(pOp->p2 <= (p->nMem + 1 - p->nCursor));
+			assert(memIsValid(&aMem[pOp->p2]));
+			assert(sqlVdbeCheckMemInvariants(&aMem[pOp->p2]));
+			REGISTER_TRACE(p, pOp->p2, &aMem[pOp->p2]);
+		}
+		if ((opProperty & OPFLG_IN3) != 0) {
+			assert(pOp->p3 > 0);
+			assert(pOp->p3 <= (p->nMem + 1 - p->nCursor));
+			assert(memIsValid(&aMem[pOp->p3]));
+			assert(sqlVdbeCheckMemInvariants(&aMem[pOp->p3]));
+			REGISTER_TRACE(p, pOp->p3, &aMem[pOp->p3]);
+		}
+		if ((opProperty & OPFLG_OUT2) != 0) {
+			assert(pOp->p2 > 0);
+			assert(pOp->p2 <= (p->nMem + 1 - p->nCursor));
+			memAboutToChange(p, &aMem[pOp->p2]);
+		}
+		if ((opProperty & OPFLG_OUT3) != 0) {
+			assert(pOp->p3 > 0);
+			assert(pOp->p3 <= (p->nMem + 1 - p->nCursor));
+			memAboutToChange(p, &aMem[pOp->p3]);
+		}
+	}
+}
+
 #endif
 
 static struct Mem *
@@ -408,64 +487,76 @@ int sqlVdbeExec(Vdbe *p)
 			printf("VDBE Trace:\n");
 	}
 #endif
-	for(pOp=&aOp[p->pc]; 1; pOp++) {
-		/* Errors are detected by individual opcodes, with an immediate
-		 * jumps to abort_due_to_error.
-		 */
-		assert(rc == 0);
 
-		assert(pOp>=aOp && pOp<&aOp[p->nOp]);
+	assert(pOp>=aOp && pOp<&aOp[p->nOp]);
 
-		/* Only allow tracing if SQL_DEBUG is defined.
-		 */
+#if defined(SQL_USE_GOTO)
+
+#define EXECUTE(opname) Exec_##opname
+#define NEXT(opcode)    goto *dispatch_table[opcode]
+#define SWITCH(opcode)  goto *dispatch_table[opcode];
+
+#else
+
+#define EXECUTE(opname) case opname
+#define NEXT(opcode)    goto start_eval
+#define SWITCH(opcode)  start_eval: switch (opcode)
+
+#endif /* defined(SQL_USE_GOTO) */
+
+/*
+ * Define macro to hide internal implementation
+ * of dispatching to next opcode processing
+ */
 #ifdef SQL_DEBUG
-		if ((p->sql_flags & SQL_VdbeTrace) != 0)
-			sqlVdbePrintOp(stdout, (int)(pOp - aOp), pOp);
-#endif
 
+#define DISPATCH() do {                       	  \
+	vdbe_trace(p, pOrigOp, rc, aMem);         \
+	pOp++;                                    \
+	assert(rc == 0);                          \
+	assert(pOp >= aOp && pOp < &aOp[p->nOp]); \
+	/*nVmStep++;*/                            \
+	check_vdbe_operands(p, pOp, aOp, aMem);   \
+	pOrigOp = pOp;                            \
+	NEXT(pOp->opcode);                        \
+} while (0)
 
-		/* Sanity checking on other operands */
+#else
+
+#define DISPATCH() do {                       	  \
+	pOp++;                                    \
+	assert(rc == 0);                          \
+	assert(pOp >= aOp && pOp < &aOp[p->nOp]); \
+	/*nVmStep++;*/                            \
+	NEXT(pOp->opcode);                        \
+} while (0)
+
+#endif /* SQL_DEBUG */
+
+#ifdef SQL_USE_GOTO
+
+#include "dispatchtable.h"
+
+#endif /* SQL_USE_GOTO */
+
+	pOp = &aOp[p->pc];
+	/* Errors are detected by individual opcodes, with an immediate
+	 * jumps to abort_due_to_error.
+	 */
+	assert(rc == 0);
+
+	assert(pOp >= aOp && pOp < &aOp[p->nOp]);
+	//nVmStep++;
+
 #ifdef SQL_DEBUG
-		{
-			u8 opProperty = sqlOpcodeProperty[pOp->opcode];
-			if ((opProperty & OPFLG_IN1)!=0) {
-				assert(pOp->p1>0);
-				assert(pOp->p1<=(p->nMem+1 - p->nCursor));
-				assert(memIsValid(&aMem[pOp->p1]));
-				assert(sqlVdbeCheckMemInvariants(&aMem[pOp->p1]));
-				REGISTER_TRACE(p, pOp->p1, &aMem[pOp->p1]);
-			}
-			if ((opProperty & OPFLG_IN2)!=0) {
-				assert(pOp->p2>0);
-				assert(pOp->p2<=(p->nMem+1 - p->nCursor));
-				assert(memIsValid(&aMem[pOp->p2]));
-				assert(sqlVdbeCheckMemInvariants(&aMem[pOp->p2]));
-				REGISTER_TRACE(p, pOp->p2, &aMem[pOp->p2]);
-			}
-			if ((opProperty & OPFLG_IN3)!=0) {
-				assert(pOp->p3>0);
-				assert(pOp->p3<=(p->nMem+1 - p->nCursor));
-				assert(memIsValid(&aMem[pOp->p3]));
-				assert(sqlVdbeCheckMemInvariants(&aMem[pOp->p3]));
-				REGISTER_TRACE(p, pOp->p3, &aMem[pOp->p3]);
-			}
-			if ((opProperty & OPFLG_OUT2)!=0) {
-				assert(pOp->p2>0);
-				assert(pOp->p2<=(p->nMem+1 - p->nCursor));
-				memAboutToChange(p, &aMem[pOp->p2]);
-			}
-			if ((opProperty & OPFLG_OUT3)!=0) {
-				assert(pOp->p3>0);
-				assert(pOp->p3<=(p->nMem+1 - p->nCursor));
-				memAboutToChange(p, &aMem[pOp->p3]);
-			}
-		}
-#endif
-#if defined(SQL_DEBUG)
-		pOrigOp = pOp;
+	check_vdbe_operands(p, pOp, aOp, aMem);
+#endif /* SQL_DEBUG */
+
+#if defined(SQL_DEBUG) || defined(VDBE_PROFILE)
+	pOrigOp = pOp;
 #endif
 
-		switch( pOp->opcode) {
+	SWITCH(pOp->opcode) {
 
 /*****************************************************************************
  * What follows is a massive switch statement where each case implements a
@@ -514,7 +605,7 @@ int sqlVdbeExec(Vdbe *p)
  * that this Goto is the bottom of a loop and that the lines from P2 down
  * to the current line should be indented for EXPLAIN output.
  */
-case OP_Goto: {             /* jump */
+EXECUTE(OP_Goto): {             /* jump */
 	goto jump_to_p2;
 }
 
@@ -529,11 +620,11 @@ case OP_Goto: {             /* jump */
  * P1 parameter is an error code to be set. The P4 parameter is a
  * text description of the error.
  */
-case OP_SetDiag: {             /* jump */
+EXECUTE(OP_SetDiag): {             /* jump */
 	box_error_set(__FILE__, __LINE__, pOp->p1, pOp->p4.z);
 	if (pOp->p2 != 0)
 		goto jump_to_p2;
-	break;
+	DISPATCH();
 }
 
 /* Opcode:  Gosub P1 P2 * * *
@@ -541,7 +632,7 @@ case OP_SetDiag: {             /* jump */
  * Write the current address onto register P1
  * and then jump to address P2.
  */
-case OP_Gosub: {            /* jump */
+EXECUTE(OP_Gosub): {            /* jump */
 	assert(pOp->p1>0 && pOp->p1<=(p->nMem+1 - p->nCursor));
 	pIn1 = &aMem[pOp->p1];
 	assert(VdbeMemDynamic(pIn1)==0);
@@ -554,7 +645,7 @@ case OP_Gosub: {            /* jump */
 	 */
 			jump_to_p2:
 	pOp = &aOp[pOp->p2 - 1];
-	break;
+	DISPATCH();
 }
 
 /* Opcode:  Return P1 * * * *
@@ -562,12 +653,12 @@ case OP_Gosub: {            /* jump */
  * Jump to the next instruction after the address in register P1.  After
  * the jump, register P1 becomes undefined.
  */
-case OP_Return: {           /* in1 */
+EXECUTE(OP_Return): {           /* in1 */
 	pIn1 = &aMem[pOp->p1];
 	assert(mem_is_uint(pIn1));
 	pOp = &aOp[pIn1->u.u];
 	mem_set_invalid(pIn1);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: InitCoroutine P1 P2 P3 * *
@@ -581,7 +672,7 @@ case OP_Return: {           /* in1 */
  *
  * See also: EndCoroutine
  */
-case OP_InitCoroutine: {     /* jump */
+EXECUTE(OP_InitCoroutine): {     /* jump */
 	assert(pOp->p1>0 &&  pOp->p1<=(p->nMem+1 - p->nCursor));
 	assert(pOp->p2>=0 && pOp->p2<p->nOp);
 	assert(pOp->p3>0 && pOp->p3<p->nOp);
@@ -589,7 +680,7 @@ case OP_InitCoroutine: {     /* jump */
 	assert(!VdbeMemDynamic(pOut));
 	mem_set_uint(pOut, pOp->p3 - 1);
 	if (pOp->p2) goto jump_to_p2;
-	break;
+	DISPATCH();
 }
 
 /* Opcode:  EndCoroutine P1 * * * *
@@ -600,7 +691,7 @@ case OP_InitCoroutine: {     /* jump */
  *
  * See also: InitCoroutine
  */
-case OP_EndCoroutine: {           /* in1 */
+EXECUTE(OP_EndCoroutine): {           /* in1 */
 	VdbeOp *pCaller;
 	pIn1 = &aMem[pOp->p1];
 	assert(mem_is_uint(pIn1));
@@ -610,7 +701,7 @@ case OP_EndCoroutine: {           /* in1 */
 	assert(pCaller->p2>=0 && pCaller->p2<p->nOp);
 	pOp = &aOp[pCaller->p2 - 1];
 	mem_set_invalid(pIn1);
-	break;
+	DISPATCH();
 }
 
 /* Opcode:  Yield P1 P2 * * *
@@ -626,14 +717,14 @@ case OP_EndCoroutine: {           /* in1 */
  *
  * See also: InitCoroutine
  */
-case OP_Yield: {            /* in1, jump */
+EXECUTE(OP_Yield): {            /* in1, jump */
 	pIn1 = &aMem[pOp->p1];
 	assert(VdbeMemDynamic(pIn1)==0);
 	int pcDest = (int)pIn1->u.u;
 	mem_set_uint(pIn1, pOp - aOp);
 	REGISTER_TRACE(p, pOp->p1, pIn1);
 	pOp = &aOp[pcDest];
-	break;
+	DISPATCH();
 }
 
 /* Opcode:  Halt P1 P2 * * *
@@ -656,7 +747,7 @@ case OP_Yield: {            /* in1, jump */
  * very end of every program.  So a jump past the last instruction
  * of the program is the same as executing Halt.
  */
-case OP_Halt: {
+EXECUTE(OP_Halt): {
 	VdbeFrame *pFrame;
 	int pcx;
 	assert(pOp->p1 == 0 || ! diag_is_empty(diag_get()));
@@ -682,7 +773,7 @@ case OP_Halt: {
 		aOp = p->aOp;
 		aMem = p->aMem;
 		pOp = &aOp[pcx];
-		break;
+		DISPATCH();
 	}
 	if (pOp->p1 != 0)
 		p->is_aborted = true;
@@ -698,10 +789,10 @@ case OP_Halt: {
  *
  * The 32-bit integer value P1 is written into register P2.
  */
-case OP_Integer: {         /* out2 */
+EXECUTE(OP_Integer): {         /* out2 */
 	pOut = vdbe_prepare_null_out(p, pOp->p2);
 	mem_set_int(pOut, pOp->p1, pOp->p1 < 0);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Bool P1 P2 * * *
@@ -709,11 +800,11 @@ case OP_Integer: {         /* out2 */
  *
  * The boolean value P1 is written into register P2.
  */
-case OP_Bool: {         /* out2 */
+EXECUTE(OP_Bool): {         /* out2 */
 	pOut = vdbe_prepare_null_out(p, pOp->p2);
 	assert(pOp->p1 == 1 || pOp->p1 == 0);
 	mem_set_bool(pOut, pOp->p1);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Int64 * P2 * P4 *
@@ -722,11 +813,11 @@ case OP_Bool: {         /* out2 */
  * P4 is a pointer to a 64-bit integer value.
  * Write that value into register P2.
  */
-case OP_Int64: {           /* out2 */
+EXECUTE(OP_Int64): {           /* out2 */
 	pOut = vdbe_prepare_null_out(p, pOp->p2);
 	assert(pOp->p4.pI64!=0);
 	mem_set_int(pOut, *pOp->p4.pI64, pOp->p4type == P4_INT64);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Real * P2 * P4 *
@@ -735,11 +826,11 @@ case OP_Int64: {           /* out2 */
  * P4 is a pointer to a 64-bit floating point value.
  * Write that value into register P2.
  */
-case OP_Real: {            /* same as TK_FLOAT, out2 */
+EXECUTE(OP_Real): {            /* same as TK_FLOAT, out2 */
 	pOut = vdbe_prepare_null_out(p, pOp->p2);
 	assert(!sqlIsNaN(*pOp->p4.pReal));
 	mem_set_double(pOut, *pOp->p4.pReal);
-	break;
+	DISPATCH();
 }
 
 /**
@@ -748,10 +839,10 @@ case OP_Real: {            /* same as TK_FLOAT, out2 */
  *
  * P4 is a pointer to a DECIMAL value. Write that value into register P2.
  */
-case OP_Decimal: {            /* same as TK_DECIMAL, out2 */
+EXECUTE(OP_Decimal): {            /* same as TK_DECIMAL, out2 */
 	pOut = vdbe_prepare_null_out(p, pOp->p2);
 	mem_set_dec(pOut, pOp->p4.dec);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: String8 * P2 * P4 *
@@ -762,7 +853,7 @@ case OP_Decimal: {            /* same as TK_DECIMAL, out2 */
  * this transformation, the length of string P4 is computed and stored
  * as the P1 parameter.
  */
-case OP_String8: {         /* same as TK_STRING, out2 */
+EXECUTE(OP_String8): {         /* same as TK_STRING, out2 */
 	assert(pOp->p4.z!=0);
 	pOp->opcode = OP_String;
 	pOp->p1 = sqlStrlen30(pOp->p4.z);
@@ -771,7 +862,9 @@ case OP_String8: {         /* same as TK_STRING, out2 */
 		goto too_big;
 	assert(rc == 0);
 	/* Fall through to the next case, OP_String */
+#ifndef SQL_USE_GOTO
 	FALLTHROUGH;
+#endif /* SQL_USE_GOTO */
 }
 
 /* Opcode: String P1 P2 P3 P4 P5
@@ -786,13 +879,13 @@ case OP_String8: {         /* same as TK_STRING, out2 */
  *
  * if (P3!=0 and reg[P3]==P5) reg[P2] := CAST(reg[P2] as BLOB)
  */
-case OP_String: {          /* out2 */
+EXECUTE(OP_String): {          /* out2 */
 	assert(pOp->p4.z!=0);
 	pOut = vdbe_prepare_null_out(p, pOp->p2);
 	assert(strlen(pOp->p4.z) == (size_t)pOp->p1);
 	mem_set_str0_static(pOut, pOp->p4.z);
 	UPDATE_MAX_BLOBSIZE(pOut);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Null P1 P2 P3 * *
@@ -807,7 +900,7 @@ case OP_String: {          /* out2 */
  * NULL values will not compare equal even if SQL_NULLEQ is set on
  * OP_Ne or OP_Eq.
  */
-case OP_Null: {           /* out2 */
+EXECUTE(OP_Null): {           /* out2 */
 	int cnt;
 	pOut = vdbe_prepare_null_out(p, pOp->p2);
 	cnt = pOp->p3-pOp->p2;
@@ -823,7 +916,7 @@ case OP_Null: {           /* out2 */
 			mem_set_null(pOut);
 		cnt--;
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Blob P1 P2 P3 P4 *
@@ -832,7 +925,7 @@ case OP_Null: {           /* out2 */
  * P4 points to a blob of data P1 bytes long.  Store this
  * blob in register P2.  Set subtype to P3.
  */
-case OP_Blob: {                /* out2 */
+EXECUTE(OP_Blob): {                /* out2 */
 	assert(pOp->p1 <= SQL_MAX_LENGTH);
 	pOut = vdbe_prepare_null_out(p, pOp->p2);
 	if (pOp->p3 == 0) {
@@ -850,7 +943,7 @@ case OP_Blob: {                /* out2 */
 			mem_set_array_static(pOut, pOp->p4.z, pOp->p1);
 	}
 	UPDATE_MAX_BLOBSIZE(pOut);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Variable P1 P2 * P4 *
@@ -861,7 +954,7 @@ case OP_Blob: {                /* out2 */
  * If the parameter is named, then its name appears in P4.
  * The P4 value is used by sql_bind_parameter_name().
  */
-case OP_Variable: {            /* out2 */
+EXECUTE(OP_Variable): {            /* out2 */
 	Mem *pVar;       /* Value being transferred */
 
 	assert(pOp->p1>0 && pOp->p1<=p->nVar);
@@ -873,7 +966,7 @@ case OP_Variable: {            /* out2 */
 	pOut = vdbe_prepare_null_out(p, pOp->p2);
 	mem_copy_as_ephemeral(pOut, pVar);
 	UPDATE_MAX_BLOBSIZE(pOut);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Move P1 P2 P3 * *
@@ -885,7 +978,7 @@ case OP_Variable: {            /* out2 */
  * P1..P1+P3-1 and P2..P2+P3-1 to overlap.  It is an error
  * for P3 to be less than 1.
  */
-case OP_Move: {
+EXECUTE(OP_Move): {
 	int n;           /* Number of registers left to copy */
 	int p1;          /* Register to copy from */
 	int p2;          /* Register to copy to */
@@ -908,7 +1001,7 @@ case OP_Move: {
 		pIn1++;
 		pOut++;
 	}while( --n);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Copy P1 P2 P3 * *
@@ -919,7 +1012,7 @@ case OP_Move: {
  * This instruction makes a deep copy of the value.  A duplicate
  * is made of any string or blob constant.  See also OP_SCopy.
  */
-case OP_Copy: {
+EXECUTE(OP_Copy): {
 	int n;
 
 	n = pOp->p3;
@@ -934,7 +1027,7 @@ case OP_Copy: {
 		pOut++;
 		pIn1++;
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: SCopy P1 P2 * * *
@@ -950,7 +1043,7 @@ case OP_Copy: {
  * during the lifetime of the copy.  Use OP_Copy to make a complete
  * copy.
  */
-case OP_SCopy: {            /* out2 */
+EXECUTE(OP_SCopy): {            /* out2 */
 	pIn1 = &aMem[pOp->p1];
 	pOut = &aMem[pOp->p2];
 	assert(pOut!=pIn1);
@@ -958,7 +1051,7 @@ case OP_SCopy: {            /* out2 */
 #ifdef SQL_DEBUG
 	if (pOut->pScopyFrom==0) pOut->pScopyFrom = pIn1;
 #endif
-	break;
+	DISPATCH();
 }
 
 /* Opcode: ResultRow P1 P2 * * *
@@ -970,7 +1063,7 @@ case OP_SCopy: {            /* out2 */
  * structure to provide access to the r(P1)..r(P1+P2-1) values as
  * the result row.
  */
-case OP_ResultRow: {
+EXECUTE(OP_ResultRow): {
 	assert(p->nResColumn==pOp->p2);
 	assert(pOp->p1>0);
 	assert(pOp->p1+pOp->p2<=(p->nMem+1 - p->nCursor)+1);
@@ -1015,14 +1108,14 @@ case OP_ResultRow: {
  * Concatenation operator accepts only arguments of string-like
  * types (i.e. TEXT and BLOB).
  */
-case OP_Concat: {           /* same as TK_CONCAT, in1, in2, out3 */
+EXECUTE(OP_Concat): {           /* same as TK_CONCAT, in1, in2, out3 */
 	pIn1 = &aMem[pOp->p1];
 	pIn2 = &aMem[pOp->p2];
 	pOut = &aMem[pOp->p3];
 	if (mem_concat(pIn2, pIn1, pOut) != 0)
 		goto abort_due_to_error;
 	UPDATE_MAX_BLOBSIZE(pOut);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Add P1 P2 P3 * *
@@ -1032,13 +1125,13 @@ case OP_Concat: {           /* same as TK_CONCAT, in1, in2, out3 */
  * and store the result in register P3.
  * If either input is NULL, the result is NULL.
  */
-case OP_Add: {                 /* same as TK_PLUS, in1, in2, out3 */
+EXECUTE(OP_Add): {                 /* same as TK_PLUS, in1, in2, out3 */
 	pIn1 = &aMem[pOp->p1];
 	pIn2 = &aMem[pOp->p2];
 	pOut = &aMem[pOp->p3];
 	if (mem_add(pIn2, pIn1, pOut) != 0)
 		goto abort_due_to_error;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Multiply P1 P2 P3 * *
@@ -1049,13 +1142,13 @@ case OP_Add: {                 /* same as TK_PLUS, in1, in2, out3 */
  * and store the result in register P3.
  * If either input is NULL, the result is NULL.
  */
-case OP_Multiply: {            /* same as TK_STAR, in1, in2, out3 */
+EXECUTE(OP_Multiply): {            /* same as TK_STAR, in1, in2, out3 */
 	pIn1 = &aMem[pOp->p1];
 	pIn2 = &aMem[pOp->p2];
 	pOut = &aMem[pOp->p3];
 	if (mem_mul(pIn2, pIn1, pOut) != 0)
 		goto abort_due_to_error;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Subtract P1 P2 P3 * *
@@ -1065,13 +1158,13 @@ case OP_Multiply: {            /* same as TK_STAR, in1, in2, out3 */
  * and store the result in register P3.
  * If either input is NULL, the result is NULL.
  */
-case OP_Subtract: {           /* same as TK_MINUS, in1, in2, out3 */
+EXECUTE(OP_Subtract): {           /* same as TK_MINUS, in1, in2, out3 */
 	pIn1 = &aMem[pOp->p1];
 	pIn2 = &aMem[pOp->p2];
 	pOut = &aMem[pOp->p3];
 	if (mem_sub(pIn2, pIn1, pOut) != 0)
 		goto abort_due_to_error;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Divide P1 P2 P3 * *
@@ -1082,13 +1175,13 @@ case OP_Subtract: {           /* same as TK_MINUS, in1, in2, out3 */
  * register P1 is zero, then the result is NULL. If either input is
  * NULL, the result is NULL.
  */
-case OP_Divide: {             /* same as TK_SLASH, in1, in2, out3 */
+EXECUTE(OP_Divide): {             /* same as TK_SLASH, in1, in2, out3 */
 	pIn1 = &aMem[pOp->p1];
 	pIn2 = &aMem[pOp->p2];
 	pOut = &aMem[pOp->p3];
 	if (mem_div(pIn2, pIn1, pOut) != 0)
 		goto abort_due_to_error;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Remainder P1 P2 P3 * *
@@ -1099,13 +1192,13 @@ case OP_Divide: {             /* same as TK_SLASH, in1, in2, out3 */
  * If the value in register P1 is zero the result is NULL.
  * If either operand is NULL, the result is NULL.
  */
-case OP_Remainder: {           /* same as TK_REM, in1, in2, out3 */
+EXECUTE(OP_Remainder): {           /* same as TK_REM, in1, in2, out3 */
 	pIn1 = &aMem[pOp->p1];
 	pIn2 = &aMem[pOp->p2];
 	pOut = &aMem[pOp->p3];
 	if (mem_rem(pIn2, pIn1, pOut) != 0)
 		goto abort_due_to_error;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: SkipLoad P1 * * * *
@@ -1114,11 +1207,11 @@ case OP_Remainder: {           /* same as TK_REM, in1, in2, out3 */
  * max() aggregate will set to true if the current row is not the minimum or
  * maximum.  The P1 register is initialized to false by this instruction.
  */
-case OP_SkipLoad: {
+EXECUTE(OP_SkipLoad): {
 	if (pOp->p1) {
 		mem_set_bool(&aMem[pOp->p1], false);
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: BuiltinFunction P1 P2 P3 P4 *
@@ -1131,7 +1224,7 @@ case OP_SkipLoad: {
  *
  * See also: AggStep, AggFinal
  */
-case OP_BuiltinFunction: {
+EXECUTE(OP_BuiltinFunction): {
 	int argc = pOp->p1;
 	sql_context *pCtx;
 
@@ -1164,7 +1257,7 @@ case OP_BuiltinFunction: {
 
 	REGISTER_TRACE(p, pOp->p3, pCtx->pOut);
 	UPDATE_MAX_BLOBSIZE(pCtx->pOut);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: FunctionByName P1 P2 P3 P4 *
@@ -1175,7 +1268,7 @@ case OP_BuiltinFunction: {
  * register P2 and successors. The result of the function is
  * stored in register P3.
  */
-case OP_FunctionByName: {
+EXECUTE(OP_FunctionByName): {
 	assert(pOp->p4type == P4_DYNAMIC);
 	struct func *func = func_by_name(pOp->p4.z, strlen(pOp->p4.z));
 	if (unlikely(func == NULL)) {
@@ -1225,7 +1318,7 @@ case OP_FunctionByName: {
 
 	REGISTER_TRACE(p, pOp->p3, pOut);
 	UPDATE_MAX_BLOBSIZE(pOut);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: BitAnd P1 P2 P3 * *
@@ -1235,14 +1328,14 @@ case OP_FunctionByName: {
  * store the result in register P3.
  * If either input is NULL, the result is NULL.
  */
-case OP_BitAnd: {               /* same as TK_BITAND, in1, in2, out3 */
+EXECUTE(OP_BitAnd): {               /* same as TK_BITAND, in1, in2, out3 */
 	pIn1 = &aMem[pOp->p1];
 	pIn2 = &aMem[pOp->p2];
 	pOut = &aMem[pOp->p3];
 	if (mem_bit_and(pIn2, pIn1, pOut) != 0)
 		goto abort_due_to_error;
 	assert(pOut->type == MEM_TYPE_UINT || pOut->type == MEM_TYPE_NULL);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: BitOr P1 P2 P3 * *
@@ -1252,14 +1345,14 @@ case OP_BitAnd: {               /* same as TK_BITAND, in1, in2, out3 */
  * store the result in register P3.
  * If either input is NULL, the result is NULL.
  */
-case OP_BitOr: {                /* same as TK_BITOR, in1, in2, out3 */
+EXECUTE(OP_BitOr): {                /* same as TK_BITOR, in1, in2, out3 */
 	pIn1 = &aMem[pOp->p1];
 	pIn2 = &aMem[pOp->p2];
 	pOut = &aMem[pOp->p3];
 	if (mem_bit_or(pIn2, pIn1, pOut) != 0)
 		goto abort_due_to_error;
 	assert(pOut->type == MEM_TYPE_UINT || pOut->type == MEM_TYPE_NULL);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: ShiftLeft P1 P2 P3 * *
@@ -1270,14 +1363,14 @@ case OP_BitOr: {                /* same as TK_BITOR, in1, in2, out3 */
  * Store the result in register P3.
  * If either input is NULL, the result is NULL.
  */
-case OP_ShiftLeft: {            /* same as TK_LSHIFT, in1, in2, out3 */
+EXECUTE(OP_ShiftLeft): {            /* same as TK_LSHIFT, in1, in2, out3 */
 	pIn1 = &aMem[pOp->p1];
 	pIn2 = &aMem[pOp->p2];
 	pOut = &aMem[pOp->p3];
 	if (mem_shift_left(pIn2, pIn1, pOut) != 0)
 		goto abort_due_to_error;
 	assert(pOut->type == MEM_TYPE_UINT || pOut->type == MEM_TYPE_NULL);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: ShiftRight P1 P2 P3 * *
@@ -1288,14 +1381,14 @@ case OP_ShiftLeft: {            /* same as TK_LSHIFT, in1, in2, out3 */
  * Store the result in register P3.
  * If either input is NULL, the result is NULL.
  */
-case OP_ShiftRight: {           /* same as TK_RSHIFT, in1, in2, out3 */
+EXECUTE(OP_ShiftRight): {           /* same as TK_RSHIFT, in1, in2, out3 */
 	pIn1 = &aMem[pOp->p1];
 	pIn2 = &aMem[pOp->p2];
 	pOut = &aMem[pOp->p3];
 	if (mem_shift_right(pIn2, pIn1, pOut) != 0)
 		goto abort_due_to_error;
 	assert(pOut->type == MEM_TYPE_UINT || pOut->type == MEM_TYPE_NULL);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: AddImm  P1 P2 * * *
@@ -1305,12 +1398,12 @@ case OP_ShiftRight: {           /* same as TK_RSHIFT, in1, in2, out3 */
  * Content of register P1 and value P2 are assumed to be
  * unsigned.
  */
-case OP_AddImm: {            /* in1 */
+EXECUTE(OP_AddImm): {            /* in1 */
 	pIn1 = &aMem[pOp->p1];
 	memAboutToChange(p, pIn1);
 	assert(mem_is_uint(pIn1) && pOp->p2 >= 0);
 	pIn1->u.u += pOp->p2;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: MustBeInt P1 P2 * * *
@@ -1320,7 +1413,7 @@ case OP_AddImm: {            /* in1 */
  * without data loss, then jump immediately to P2, or if P2==0
  * raise an ER_SQL_TYPE_MISMATCH error.
  */
-case OP_MustBeInt: {            /* jump, in1 */
+EXECUTE(OP_MustBeInt): {            /* jump, in1 */
 	pIn1 = &aMem[pOp->p1];
 	if (mem_to_int_precise(pIn1) != 0) {
 		if (pOp->p2 != 0)
@@ -1329,7 +1422,7 @@ case OP_MustBeInt: {            /* jump, in1 */
 			 mem_str(pIn1), "integer");
 		goto abort_due_to_error;
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Cast P1 P2 * * *
@@ -1347,12 +1440,12 @@ case OP_MustBeInt: {            /* jump, in1 */
  *
  * A NULL value is not changed by this routine.  It remains NULL.
  */
-case OP_Cast: {                  /* in1 */
+EXECUTE(OP_Cast): {                  /* in1 */
 	pIn1 = &aMem[pOp->p1];
 	rc = mem_cast_explicit(pIn1, pOp->p2);
 	UPDATE_MAX_BLOBSIZE(pIn1);
 	if (rc == 0)
-		break;
+		DISPATCH();
 	diag_set(ClientError, ER_SQL_TYPE_MISMATCH, mem_str(pIn1),
 		 field_type_strs[pOp->p2]);
 	goto abort_due_to_error;
@@ -1363,7 +1456,7 @@ case OP_Cast: {                  /* in1 */
  *
  * Construct an ARRAY value from P1 registers starting at reg(P3).
  */
-case OP_Array: {
+EXECUTE(OP_Array): {
 	pOut = &aMem[pOp->p2];
 
 	uint32_t size;
@@ -1375,7 +1468,7 @@ case OP_Array: {
 		goto abort_due_to_error;
 	}
 	region_truncate(region, svp);
-	break;
+	DISPATCH();
 }
 
 /**
@@ -1384,7 +1477,7 @@ case OP_Array: {
  *
  * Construct an MAP value from P1 registers starting at reg(P3).
  */
-case OP_Map: {
+EXECUTE(OP_Map): {
 	pOut = &aMem[pOp->p2];
 
 	uint32_t size;
@@ -1396,7 +1489,7 @@ case OP_Map: {
 		goto abort_due_to_error;
 	}
 	region_truncate(region, svp);
-	break;
+	DISPATCH();
 }
 
 /**
@@ -1406,7 +1499,7 @@ case OP_Map: {
  * Get an element from the value in register P3[P1] using values in
  * registers P3, ... P3 + (P1 - 1).
  */
-case OP_Getitem: {
+EXECUTE(OP_Getitem): {
 	int count = pOp->p1;
 	assert(count > 0);
 	struct Mem *value = &aMem[pOp->p3 + count];
@@ -1425,7 +1518,7 @@ case OP_Getitem: {
 	struct Mem *keys = &aMem[pOp->p3];
 	if (mem_getitem(value, keys, count, pOut) != 0)
 		goto abort_due_to_error;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Eq P1 P2 P3 P4 P5
@@ -1444,8 +1537,8 @@ case OP_Getitem: {
  * This works just like the Eq opcode except that the action is performed if
  * r[P3] != r[P1]. See the Eq opcode for additional information.
  */
-case OP_Eq:               /* same as TK_EQ, jump, in1, in3 */
-case OP_Ne: {             /* same as TK_NE, jump, in1, in3 */
+EXECUTE(OP_Eq):               /* same as TK_EQ, jump, in1, in3 */
+EXECUTE(OP_Ne): {             /* same as TK_NE, jump, in1, in3 */
 	pIn1 = &aMem[pOp->p1];
 	pIn3 = &aMem[pOp->p3];
 	if (mem_is_any_null(pIn1, pIn3) && (pOp->p5 & SQL_NULLEQ) == 0) {
@@ -1458,11 +1551,11 @@ case OP_Ne: {             /* same as TK_NE, jump, in1, in3 */
 			pOut = vdbe_prepare_null_out(p, pOp->p2);
 			iCompare = 1;
 			REGISTER_TRACE(p, pOp->p2, pOut);
-			break;
+			DISPATCH();
 		}
 		if ((pOp->p5 & SQL_JUMPIFNULL) != 0)
 			goto jump_to_p2;
-		break;
+		DISPATCH();
 	}
 	int cmp_res;
 	if (mem_cmp(pIn3, pIn1, &cmp_res, pOp->p4.pColl) != 0)
@@ -1473,11 +1566,11 @@ case OP_Ne: {             /* same as TK_NE, jump, in1, in3 */
 		pOut = &aMem[pOp->p2];
 		mem_set_bool(pOut, result);
 		REGISTER_TRACE(p, pOp->p2, pOut);
-		break;
+		DISPATCH();
 	}
 	if (result)
 		goto jump_to_p2;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Lt P1 P2 P3 P4 P5
@@ -1507,10 +1600,10 @@ case OP_Ne: {             /* same as TK_NE, jump, in1, in3 */
  * This works just like the Lt opcode except that the action is performed if
  * r[P3] >= r[P1]. See the Lt opcode for additional information.
  */
-case OP_Lt:               /* same as TK_LT, jump, in1, in3 */
-case OP_Le:               /* same as TK_LE, jump, in1, in3 */
-case OP_Gt:               /* same as TK_GT, jump, in1, in3 */
-case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
+EXECUTE(OP_Lt):               /* same as TK_LT, jump, in1, in3 */
+EXECUTE(OP_Le):               /* same as TK_LE, jump, in1, in3 */
+EXECUTE(OP_Gt):               /* same as TK_GT, jump, in1, in3 */
+EXECUTE(OP_Ge): {             /* same as TK_GE, jump, in1, in3 */
 	pIn1 = &aMem[pOp->p1];
 	pIn3 = &aMem[pOp->p3];
 	if (mem_is_any_null(pIn1, pIn3)) {
@@ -1518,11 +1611,11 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 			pOut = vdbe_prepare_null_out(p, pOp->p2);
 			iCompare = 1;
 			REGISTER_TRACE(p, pOp->p2, pOut);
-			break;
+			DISPATCH();
 		}
 		if ((pOp->p5 & SQL_JUMPIFNULL) != 0)
 			goto jump_to_p2;
-		break;
+		DISPATCH();
 	}
 	int cmp_res;
 	if (mem_cmp(pIn3, pIn1, &cmp_res, pOp->p4.pColl) != 0)
@@ -1551,11 +1644,11 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
 		pOut = &aMem[pOp->p2];
 		mem_set_bool(pOut, result);
 		REGISTER_TRACE(p, pOp->p2, pOut);
-		break;
+		DISPATCH();
 	}
 	if (result)
 		goto jump_to_p2;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: ElseNotEq * P2 * * *
@@ -1566,12 +1659,12 @@ case OP_Ge: {             /* same as TK_GE, jump, in1, in3 */
  * If the result of an OP_Eq comparison on the two previous operands
  * would have been true (1), then fall through.
  */
-case OP_ElseNotEq: {       /* same as TK_ESCAPE, jump */
+EXECUTE(OP_ElseNotEq): {       /* same as TK_ESCAPE, jump */
 	assert(pOp>aOp);
 	assert(pOp[-1].opcode==OP_Lt || pOp[-1].opcode==OP_Gt);
 	assert(pOp[-1].p5 & SQL_STOREP2);
 	if (iCompare!=0) goto jump_to_p2;
-	break;
+	DISPATCH();
 }
 
 
@@ -1587,11 +1680,11 @@ case OP_ElseNotEq: {       /* same as TK_ESCAPE, jump */
  * The first integer in the P4 integer array is the length of the array
  * and does not become part of the permutation.
  */
-case OP_Permutation: {
+EXECUTE(OP_Permutation): {
 			assert(pOp->p4type==P4_INTARRAY);
 			assert(pOp->p4.ai);
 			aPermute = pOp->p4.ai + 1;
-			break;
+			DISPATCH();
 		}
 
 /* Opcode: Compare P1 P2 P3 P4 P5
@@ -1614,7 +1707,7 @@ case OP_Permutation: {
  * NULLs are less than numbers, numbers are less than strings,
  * and strings are less than blobs.
  */
-case OP_Compare: {
+EXECUTE(OP_Compare): {
 	int p1;
 	int p2;
 	int idx;
@@ -1674,7 +1767,7 @@ case OP_Compare: {
 		}
 	}
 	aPermute = 0;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Jump P1 P2 P3 * *
@@ -1683,14 +1776,14 @@ case OP_Compare: {
  * in the most recent OP_Compare instruction the P1 vector was less than
  * equal to, or greater than the P2 vector, respectively.
  */
-case OP_Jump: {             /* jump */
+EXECUTE(OP_Jump): {             /* jump */
 	if (iCompare < 0)
 		pOp = &aOp[pOp->p1 - 1];
 	else if (iCompare == 0)
 		pOp = &aOp[pOp->p2 - 1];
 	else
 		pOp = &aOp[pOp->p3 - 1];
-	break;
+	DISPATCH();
 }
 
 /* Opcode: And P1 P2 P3 * *
@@ -1713,8 +1806,8 @@ case OP_Jump: {             /* jump */
  * even if the other input is NULL.  A NULL and false or two NULLs
  * give a NULL output.
  */
-case OP_And:              /* same as TK_AND, in1, in2, out3 */
-case OP_Or: {             /* same as TK_OR, in1, in2, out3 */
+EXECUTE(OP_And):              /* same as TK_AND, in1, in2, out3 */
+EXECUTE(OP_Or): {             /* same as TK_OR, in1, in2, out3 */
 	int v1;    /* Left operand:  0==FALSE, 1==TRUE, 2==UNKNOWN or NULL */
 	int v2;    /* Right operand: 0==FALSE, 1==TRUE, 2==UNKNOWN or NULL */
 
@@ -1748,7 +1841,7 @@ case OP_Or: {             /* same as TK_OR, in1, in2, out3 */
 	pOut = vdbe_prepare_null_out(p, pOp->p3);
 	if (v1 != 2)
 		mem_set_bool(pOut, v1);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Not P1 P2 * * *
@@ -1758,7 +1851,7 @@ case OP_Or: {             /* same as TK_OR, in1, in2, out3 */
  * boolean complement in register P2.  If the value in register P1 is
  * NULL, then a NULL is stored in P2.
  */
-case OP_Not: {                /* same as TK_NOT, in1, out2 */
+EXECUTE(OP_Not): {                /* same as TK_NOT, in1, out2 */
 	pIn1 = &aMem[pOp->p1];
 	pOut = vdbe_prepare_null_out(p, pOp->p2);
 	if (!mem_is_null(pIn1)) {
@@ -1769,7 +1862,7 @@ case OP_Not: {                /* same as TK_NOT, in1, out2 */
 		}
 		mem_set_bool(pOut, ! pIn1->u.b);
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: BitNot P1 P2 * * *
@@ -1779,12 +1872,12 @@ case OP_Not: {                /* same as TK_NOT, in1, out2 */
  * ones-complement of the P1 value into register P2.  If P1 holds
  * a NULL then store a NULL in P2.
  */
-case OP_BitNot: {             /* same as TK_BITNOT, in1, out2 */
+EXECUTE(OP_BitNot): {             /* same as TK_BITNOT, in1, out2 */
 	pIn1 = &aMem[pOp->p1];
 	pOut = &aMem[pOp->p2];
 	if (mem_bit_not(pIn1, pOut) != 0)
 		goto abort_due_to_error;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Once P1 P2 * * *
@@ -1794,14 +1887,14 @@ case OP_BitNot: {             /* same as TK_BITNOT, in1, out2 */
  * set the P1 value on this opcode to equal the P1 value on the OP_Init
  * and fall through.
  */
-case OP_Once: {             /* jump */
+EXECUTE(OP_Once): {             /* jump */
 	assert(p->aOp[0].opcode==OP_Init);
 	if (p->aOp[0].p1==pOp->p1) {
 		goto jump_to_p2;
 	} else {
 		pOp->p1 = p->aOp[0].p1;
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: If P1 P2 P3 * *
@@ -1814,8 +1907,8 @@ case OP_Once: {             /* jump */
  * Jump to P2 if the value in register P1 is False. If the value
  * in P1 is NULL then take the jump if and only if P3 is non-zero.
  */
-case OP_If:                 /* jump, in1 */
-case OP_IfNot: {            /* jump, in1 */
+EXECUTE(OP_If):                 /* jump, in1 */
+EXECUTE(OP_IfNot): {            /* jump, in1 */
 	int c;
 	pIn1 = &aMem[pOp->p1];
 	if (mem_is_null(pIn1)) {
@@ -1830,7 +1923,7 @@ case OP_IfNot: {            /* jump, in1 */
 	if (c) {
 		goto jump_to_p2;
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: IsNull P1 P2 * * *
@@ -1838,12 +1931,12 @@ case OP_IfNot: {            /* jump, in1 */
  *
  * Jump to P2 if the value in register P1 is NULL.
  */
-case OP_IsNull: {            /* same as TK_ISNULL, jump, in1 */
+EXECUTE(OP_IsNull): {            /* same as TK_ISNULL, jump, in1 */
 	pIn1 = &aMem[pOp->p1];
 	if (mem_is_null(pIn1)) {
 		goto jump_to_p2;
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: NotNull P1 P2 * * *
@@ -1851,12 +1944,12 @@ case OP_IsNull: {            /* same as TK_ISNULL, jump, in1 */
  *
  * Jump to P2 if the value in register P1 is not NULL.
  */
-case OP_NotNull: {            /* same as TK_NOTNULL, jump, in1 */
+EXECUTE(OP_NotNull): {            /* same as TK_NOTNULL, jump, in1 */
 	pIn1 = &aMem[pOp->p1];
 	if (!mem_is_null(pIn1)) {
 		goto jump_to_p2;
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Column P1 P2 P3 P4 P5
@@ -1884,7 +1977,7 @@ case OP_NotNull: {            /* same as TK_NOTNULL, jump, in1 */
  * or typeof() function, respectively.  The loading of large blobs can be
  * skipped for length() and all content loading can be skipped for typeof().
  */
-case OP_Column: {
+EXECUTE(OP_Column): {
 	int p2;            /* column number to retrieve */
 	VdbeCursor *pC;    /* The VDBE cursor */
 	BtCursor *pCrsr = NULL; /* The BTree cursor */
@@ -1952,7 +2045,7 @@ case OP_Column: {
 		pDest->flags |= MEM_Number;
 op_column_out:
 	REGISTER_TRACE(p, pOp->p3, pDest);
-	break;
+	DISPATCH();
 }
 
 /**
@@ -1963,7 +2056,7 @@ op_column_out:
  * P4 contains the name of the field to retrieve. The retrieved value is stored
  * in register P3.
  */
-case OP_FetchByName: {
+EXECUTE(OP_FetchByName): {
 	struct vdbe_field_ref *ref = p->aMem[pOp->p1].u.p;
 	assert(pOp->p4type == P4_DYNAMIC);
 	uint32_t id;
@@ -1990,7 +2083,7 @@ case OP_FetchByName: {
 	if (vdbe_field_ref_fetch(ref, id, res) != 0)
 		goto abort_due_to_error;
 	REGISTER_TRACE(p, pOp->p3, res);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Fetch P1 P2 P3 * *
@@ -1999,13 +2092,13 @@ case OP_FetchByName: {
  * Interpret data P1 points at as an initialized vdbe_field_ref object. Extract
  * the P2th field from the tuple. The retrieved value is stored in register P3.
  */
-case OP_Fetch: {
+EXECUTE(OP_Fetch): {
 	struct vdbe_field_ref *ref = p->aMem[pOp->p1].u.p;
 	struct Mem *res = vdbe_prepare_null_out(p, pOp->p3);
 	if (vdbe_field_ref_fetch(ref, pOp->p2, res) != 0)
 		goto abort_due_to_error;
 	REGISTER_TRACE(p, pOp->p3, res);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: ApplyType P1 P2 * P4 *
@@ -2017,7 +2110,7 @@ case OP_Fetch: {
  * field_mp_plain_type_is_compatible(), but both are numeric,
  * this opcode attempts to convert the value to the type.
  */
-case OP_ApplyType: {
+EXECUTE(OP_ApplyType): {
 	enum field_type *types = pOp->p4.types;
 	assert(types != NULL);
 	pIn1 = &aMem[pOp->p1];
@@ -2031,7 +2124,7 @@ case OP_ApplyType: {
 			goto abort_due_to_error;
 		}
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: MakeRecord P1 P2 P3 * P5
@@ -2044,7 +2137,7 @@ case OP_ApplyType: {
  * If P5 is not NULL then record under construction is intended to be inserted
  * into ephemeral space. Thus, sort of memory optimization can be performed.
  */
-case OP_MakeRecord: {
+EXECUTE(OP_MakeRecord): {
 	Mem *pData0;           /* First field to be combined into the record */
 	int nField;            /* Number of fields in the record */
 	u8 bIsEphemeral;
@@ -2109,7 +2202,7 @@ case OP_MakeRecord: {
 	assert(pOp->p3>0 && pOp->p3<=(p->nMem+1 - p->nCursor));
 	REGISTER_TRACE(p, pOp->p3, pOut);
 	UPDATE_MAX_BLOBSIZE(pOut);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Count P1 P2 * * *
@@ -2118,7 +2211,7 @@ case OP_MakeRecord: {
  * Store the number of entries (an integer value) in the table or index
  * opened by cursor P1 in register P2
  */
-case OP_Count: {         /* out2 */
+EXECUTE(OP_Count): {         /* out2 */
 	i64 nEntry;
 	BtCursor *pCrsr;
 
@@ -2133,7 +2226,7 @@ case OP_Count: {         /* out2 */
 	}
 	pOut = vdbe_prepare_null_out(p, pOp->p2);
 	mem_set_uint(pOut, nEntry);
-	break;
+	DISPATCH();
 }
 
 /**
@@ -2146,7 +2239,7 @@ case OP_Count: {         /* out2 */
  * the fieldno of the child field, and r[P1 + 3] contains the fieldno of the
  * parent fields.
  */
-case OP_CreateForeignKey: {
+EXECUTE(OP_CreateForeignKey): {
 	assert(pOp->p1 >= 0);
 	struct Mem *mems = &aMem[pOp->p1];
 	assert(mem_is_uint(&mems[0]) && mem_is_uint(&mems[1]));
@@ -2169,7 +2262,7 @@ case OP_CreateForeignKey: {
 		goto abort_due_to_error;
 	if (p->nChange == 0)
 		p->nChange = 1;
-	break;
+	DISPATCH();
 }
 
 /**
@@ -2179,7 +2272,7 @@ case OP_CreateForeignKey: {
  * r[P1] contains the ID of the space, register r[P2] contains the ID of the
  * function. If P5 is not 0 than P3 is fieldno of field containing this check.
  */
-case OP_CreateCheck: {
+EXECUTE(OP_CreateCheck): {
 	assert(pOp->p1 >= 0 && pOp->p2 >= 0 && pOp->p3 >= 0);
 	uint32_t space_id = aMem[pOp->p1].u.u;
 	uint32_t func_id = aMem[pOp->p2].u.u;
@@ -2191,66 +2284,66 @@ case OP_CreateCheck: {
 		goto abort_due_to_error;
 	if (p->nChange == 0)
 		p->nChange = 1;
-	break;
+	DISPATCH();
 }
 
 /**
  * Opcode: OP_DropTupleForeignKey P1 * * P4 *
  * Synopsis: Drop FOREIGN KEY constraint from box.space[P1]
  */
-case OP_DropTupleForeignKey: {
+EXECUTE(OP_DropTupleForeignKey): {
 	assert(pOp->p1 >= 0 && pOp->p4.z != NULL);
 	if (sql_tuple_foreign_key_drop(pOp->p1, pOp->p4.z) != 0)
 		goto abort_due_to_error;
 	assert(p->nChange == 0);
 	p->nChange = 1;
-	break;
+	DISPATCH();
 }
 
 /**
  * Opcode: DropTupleConstraint P1 * * P4 *
  * Synopsis: Drop CHECK constraint from box.space[P1]
  */
-case OP_DropTupleCheck: {
+EXECUTE(OP_DropTupleCheck): {
 	assert(pOp->p1 >= 0 && pOp->p4.z != NULL);
 	if (sql_tuple_check_drop(pOp->p1, pOp->p4.z) != 0)
 		goto abort_due_to_error;
 	assert(p->nChange == 0);
 	p->nChange = 1;
-	break;
+	DISPATCH();
 }
 
 /**
  * Opcode: OP_DropFieldForeignKey P1 * P3 P4 *
  * Synopsis: Drop FOREIGN KEY constraint from field P3 of box.space[P1]
  */
-case OP_DropFieldForeignKey: {
+EXECUTE(OP_DropFieldForeignKey): {
 	assert(pOp->p1 >= 0 && pOp->p4.z != NULL);
 	if (sql_field_foreign_key_drop(pOp->p1, pOp->p3, pOp->p4.z) != 0)
 		goto abort_due_to_error;
 	assert(p->nChange == 0);
 	p->nChange = 1;
-	break;
+	DISPATCH();
 }
 
 /**
  * Opcode: OP_DropFieldCheck P1 * P3 P4 *
  * Synopsis: Drop CHECK constraint from field P3 of box.space[P1]
  */
-case OP_DropFieldCheck: {
+EXECUTE(OP_DropFieldCheck): {
 	assert(pOp->p1 >= 0 && pOp->p4.z != NULL);
 	if (sql_field_check_drop(pOp->p1, pOp->p3, pOp->p4.z) != 0)
 		goto abort_due_to_error;
 	assert(p->nChange == 0);
 	p->nChange = 1;
-	break;
+	DISPATCH();
 }
 
 /**
  * Opcode: AddFuncDefault P1 P2 P3 * *
  * Synopsis: Add function r[P2] as default for field P3 of box.space[r[P1]]
  */
-case OP_AddFuncDefault: {
+EXECUTE(OP_AddFuncDefault): {
 	assert(aMem[pOp->p1].type == MEM_TYPE_UINT);
 	uint32_t space_id = aMem[pOp->p1].u.u;
 	uint32_t fieldno = pOp->p3;
@@ -2258,7 +2351,7 @@ case OP_AddFuncDefault: {
 	uint32_t func_id = aMem[pOp->p2].u.u;
 	if (sql_add_default(space_id, fieldno, func_id) != 0)
 		goto abort_due_to_error;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Savepoint P1 * P3 P4 *
@@ -2271,7 +2364,7 @@ case OP_AddFuncDefault: {
  * is not found by the name specified in P4, an additional search is performed
  * on the name specified in P3.
  */
-case OP_Savepoint: {
+EXECUTE(OP_Savepoint): {
 	int p1;                         /* Value of P1 operand */
 	char *zName;                    /* Name of savepoint */
 	struct txn *txn = in_txn();
@@ -2319,7 +2412,7 @@ case OP_Savepoint: {
 		}
 	}
 
-	break;
+	DISPATCH();
 }
 
 /* Opcode: CheckViewReferences P1 * * * *
@@ -2331,7 +2424,7 @@ case OP_Savepoint: {
  * firstly drop secondary indexes from _index system space,
  * clear _truncate table etc.
  */
-case OP_CheckViewReferences: {
+EXECUTE(OP_CheckViewReferences): {
 	assert(pOp->p1 > 0);
 	pIn1 = &aMem[pOp->p1];
 	uint64_t space_id = pIn1->u.u;
@@ -2343,7 +2436,7 @@ case OP_CheckViewReferences: {
 			 "other views depend on this space");
 		goto abort_due_to_error;
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: TransactionBegin * * * * *
@@ -2352,7 +2445,7 @@ case OP_CheckViewReferences: {
  * Only do that if there is no other active transactions.
  * Otherwise, raise an error with appropriate error message.
  */
-case OP_TransactionBegin: {
+EXECUTE(OP_TransactionBegin): {
 	if (in_txn()) {
 		diag_set(ClientError, ER_ACTIVE_TRANSACTION);
 		goto abort_due_to_error;
@@ -2360,7 +2453,7 @@ case OP_TransactionBegin: {
 	if (txn_begin() == NULL)
 		goto abort_due_to_error;
 	p->auto_commit = false	;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: TransactionCommit * * * * *
@@ -2370,7 +2463,7 @@ case OP_TransactionBegin: {
  * After txn was committed VDBE should take care of region. Region is needed
  * to get information of autogenerated ids during sql response dump.
  */
-case OP_TransactionCommit: {
+EXECUTE(OP_TransactionCommit): {
 	struct txn *txn = in_txn();
 	if (txn != NULL) {
 		if (txn_commit(txn) != 0)
@@ -2380,7 +2473,7 @@ case OP_TransactionCommit: {
 			 "transaction is active");
 		goto abort_due_to_error;
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: TransactionRollback * * * * *
@@ -2388,7 +2481,7 @@ case OP_TransactionCommit: {
  * Rollback Tarantool's transaction.
  * If there is no active transaction, raise an error.
  */
-case OP_TransactionRollback: {
+EXECUTE(OP_TransactionRollback): {
 	if (box_txn()) {
 		if (box_txn_rollback() != 0)
 			goto abort_due_to_error;
@@ -2397,7 +2490,7 @@ case OP_TransactionRollback: {
 			 "transaction is active");
 		goto abort_due_to_error;
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: TTransaction * * * * *
@@ -2410,7 +2503,7 @@ case OP_TransactionRollback: {
  * In contrast to OP_TransactionBegin, this is service opcode,
  * generated automatically alongside with DML routine.
  */
-case OP_TTransaction: {
+EXECUTE(OP_TTransaction): {
 	if (!box_txn()) {
 		if (txn_begin() == NULL)
 			goto abort_due_to_error;
@@ -2419,7 +2512,7 @@ case OP_TTransaction: {
 		if (p->anonymous_savepoint == NULL)
 			goto abort_due_to_error;
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: IteratorOpen P1 P2 P3 * P5
@@ -2430,7 +2523,7 @@ case OP_TTransaction: {
  * contiguous but all P1 values should be small integers. It is an error for P1
  * to be negative.
  */
-case OP_IteratorOpen: {
+EXECUTE(OP_IteratorOpen): {
 	struct VdbeCursor *cur = p->apCsr[pOp->p1];
 	if (box_schema_version() != p->schema_ver &&
 	    (pOp->p5 & OPFLAG_SYSTEMSP) == 0) {
@@ -2464,7 +2557,7 @@ case OP_IteratorOpen: {
 	cur->key_def = index->def->key_def;
 	cur->nullRow = 1;
 	cur->uc.pCursor->hints = pOp->p5 & OPFLAG_SEEKEQ;
-	break;
+	DISPATCH();
 }
 
 /**
@@ -2474,12 +2567,12 @@ case OP_IteratorOpen: {
  * Open the space using its ID stored in register P2 and write a pointer to the
  * space to register P1.
  */
-case OP_OpenSpace: {
+EXECUTE(OP_OpenSpace): {
 	assert(pOp->p1 >= 0 && pOp->p1 > 0);
 	struct space *space = space_by_id(pOp->p2);
 	assert(space != NULL);
 	mem_set_ptr(&aMem[pOp->p1], space);
-	break;
+	DISPATCH();
 }
 
 /**
@@ -2491,7 +2584,7 @@ case OP_OpenSpace: {
  * This opcode creates Tarantool's ephemeral table and stores pointer
  * to it into P1 register.
  */
-case OP_OpenTEphemeral: {
+EXECUTE(OP_OpenTEphemeral): {
 	assert(pOp->p1 >= 0);
 
 	assert(pOp->p4type == P4_DYNAMIC || pOp->p4type == P4_STATIC);
@@ -2502,7 +2595,7 @@ case OP_OpenTEphemeral: {
 	if (space == NULL)
 		goto abort_due_to_error;
 	mem_set_ptr(&aMem[pOp->p1], space);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: SorterOpen P1 P2 P3 P4 *
@@ -2515,7 +2608,7 @@ case OP_OpenTEphemeral: {
  * assume that a stable sort considering the first P3 fields of each
  * key is sufficient to produce the required results.
  */
-case OP_SorterOpen: {
+EXECUTE(OP_SorterOpen): {
 	VdbeCursor *pCx;
 
 	assert(pOp->p1>=0);
@@ -2529,7 +2622,7 @@ case OP_SorterOpen: {
 	pCx->key_def = def;
 	if (sqlVdbeSorterInit(pCx) != 0)
 		goto abort_due_to_error;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: SequenceTest P1 P2 * * *
@@ -2539,7 +2632,7 @@ case OP_SorterOpen: {
  * to P2. Regardless of whether or not the jump is taken, increment the
  * the sequence value.
  */
-case OP_SequenceTest: {
+EXECUTE(OP_SequenceTest): {
 	VdbeCursor *pC;
 	assert(pOp->p1>=0 && pOp->p1<p->nCursor);
 	pC = p->apCsr[pOp->p1];
@@ -2547,7 +2640,7 @@ case OP_SequenceTest: {
 	if ((pC->seqCount++)==0) {
 		goto jump_to_p2;
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: OpenPseudo P1 P2 P3 * *
@@ -2566,7 +2659,7 @@ case OP_SequenceTest: {
  * P3 is the number of fields in the records that will be stored by
  * the pseudo-table.
  */
-case OP_OpenPseudo: {
+EXECUTE(OP_OpenPseudo): {
 	VdbeCursor *pCx;
 
 	assert(pOp->p1>=0);
@@ -2577,7 +2670,7 @@ case OP_OpenPseudo: {
 	pCx->nullRow = 1;
 	pCx->uc.pseudoTableReg = pOp->p2;
 	assert(pOp->p5==0);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Close P1 * * * *
@@ -2585,11 +2678,11 @@ case OP_OpenPseudo: {
  * Close a cursor previously opened as P1.  If P1 is not
  * currently open, this instruction is a no-op.
  */
-case OP_Close: {
+EXECUTE(OP_Close): {
 	assert(pOp->p1>=0 && pOp->p1<p->nCursor);
 	sqlVdbeFreeCursor(p->apCsr[pOp->p1]);
 	p->apCsr[pOp->p1] = 0;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: SeekLT P1 P2 P3 P4 *
@@ -2626,8 +2719,8 @@ case OP_Close: {
  * from the beginning toward the end.  In other words, the cursor is
  * configured to use Next, not Prev.
  */
-case OP_SeekLT:         /* jump, in3 */
-case OP_SeekGT: {       /* jump, in3 */
+EXECUTE(OP_SeekLT):         /* jump, in3 */
+EXECUTE(OP_SeekGT): {       /* jump, in3 */
 	bool is_lt = pOp->opcode == OP_SeekLT;
 	struct VdbeCursor *cur = p->apCsr[pOp->p1];
 #ifdef SQL_DEBUG
@@ -2669,7 +2762,7 @@ case OP_SeekGT: {       /* jump, in3 */
 	assert(pOp->p2 > 0);
 	if (res != 0)
 		goto jump_to_p2;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: SeekLE P1 P2 P3 P4 *
@@ -2722,8 +2815,8 @@ case OP_SeekGT: {       /* jump, in3 */
  *
  * See also: Found, NotFound, SeekLt, SeekGt, SeekLe
  */
-case OP_SeekLE:         /* jump, in3 */
-case OP_SeekGE: {       /* jump, in3 */
+EXECUTE(OP_SeekLE):         /* jump, in3 */
+EXECUTE(OP_SeekGE): {       /* jump, in3 */
 	bool is_le = pOp->opcode == OP_SeekLE;
 	struct VdbeCursor *cur = p->apCsr[pOp->p1];
 #ifdef SQL_DEBUG
@@ -2784,7 +2877,7 @@ case OP_SeekGE: {       /* jump, in3 */
 	/* Skip the OP_IdxLT/OP_IdxGT that follows if we have EQ. */
 	if (is_eq)
 		pOp++;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Found P1 P2 P3 P4 *
@@ -2846,9 +2939,9 @@ case OP_SeekGE: {       /* jump, in3 */
  *
  * See also: NotFound, Found, NotExists
  */
-case OP_NoConflict:     /* jump, in3 */
-case OP_NotFound:       /* jump, in3 */
-case OP_Found: {        /* jump, in3 */
+EXECUTE(OP_NoConflict):     /* jump, in3 */
+EXECUTE(OP_NotFound):       /* jump, in3 */
+EXECUTE(OP_Found): {        /* jump, in3 */
 	int alreadyExists;
 	int takeJump;
 	int ii;
@@ -2925,7 +3018,7 @@ case OP_Found: {        /* jump, in3 */
 		if (takeJump || !alreadyExists)
 			goto jump_to_p2;
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Sequence P1 P2 * * *
@@ -2936,13 +3029,13 @@ case OP_Found: {        /* jump, in3 */
  * The sequence number on the cursor is incremented after this
  * instruction.
  */
-case OP_Sequence: {           /* out2 */
+EXECUTE(OP_Sequence): {           /* out2 */
 	assert(pOp->p1>=0 && pOp->p1<p->nCursor);
 	assert(p->apCsr[pOp->p1]!=0);
 	pOut = vdbe_prepare_null_out(p, pOp->p2);
 	int64_t seq_val = p->apCsr[pOp->p1]->seqCount++;
 	mem_set_uint(pOut, seq_val);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: NextSystemSpaceId P1 P2 P3 * *
@@ -2951,7 +3044,7 @@ case OP_Sequence: {           /* out2 */
  * Place the next value of the primary key of the _sequence or _func space into
  * register P2. P1 is the system space identifier. P3 is fieldno of primary key.
  */
-case OP_NextSystemSpaceId: {
+EXECUTE(OP_NextSystemSpaceId): {
 	assert(pOp->p1 >= 0 && pOp->p3 >= 0);
 	uint32_t space_id = pOp->p1;
 	assert(space_id == BOX_SEQUENCE_ID || space_id == BOX_FUNC_ID);
@@ -2964,14 +3057,14 @@ case OP_NextSystemSpaceId: {
 		goto abort_due_to_error;
 	if (tuple == NULL) {
 		mem_set_uint(res, 1);
-		break;
+		DISPATCH();
 	}
 	uint32_t fieldno = pOp->p3;
 	uint64_t id;
 	if (tuple_field_u64(tuple, fieldno, &id) != 0)
 		goto abort_due_to_error;
 	mem_set_uint(res, id + 1);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: NextIdEphemeral P1 P2 * * *
@@ -2983,7 +3076,7 @@ case OP_NextSystemSpaceId: {
  * Tarantool`s ephemeral spaces can contain only unique tuples
  * due to only one index (which is PK over all columns in space).
  */
-case OP_NextIdEphemeral: {
+EXECUTE(OP_NextIdEphemeral): {
 	struct space *space = (struct space*)p->aMem[pOp->p1].u.p;
 	assert(space->def->id == 0);
 	uint64_t rowid;
@@ -3001,7 +3094,7 @@ case OP_NextIdEphemeral: {
 	}
 	pOut = vdbe_prepare_null_out(p, pOp->p2);
 	mem_set_uint(pOut, rowid);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: FCopy P1 P2 P3 * *
@@ -3016,7 +3109,7 @@ case OP_NextIdEphemeral: {
  *
  * If P3's flag OPFLAG_NOOP_IF_NULL is set, then do nothing if reg[P1] is NULL
  */
-case OP_FCopy: {     /* out2 */
+EXECUTE(OP_FCopy): {     /* out2 */
 	VdbeFrame *pFrame;
 	Mem *pIn1, *pOut;
 	if (p->pFrame && ((pOp->p3 & OPFLAG_SAME_FRAME) == 0)) {
@@ -3035,7 +3128,7 @@ case OP_FCopy: {     /* out2 */
 		pOut = vdbe_prepare_null_out(p, pOp->p2);
 		mem_copy_as_ephemeral(pOut, pIn1);
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Delete P1 P2 P3 P4 P5
@@ -3069,7 +3162,7 @@ case OP_FCopy: {     /* out2 */
  * invoked if P4 is not NULL. The update-hook is invoked if one is configured,
  * P4 is not NULL, and the OPFLAG_NCHANGE flag is set in P2.
  */
-case OP_Delete: {
+EXECUTE(OP_Delete): {
 	VdbeCursor *pC;
 	int opflags;
 
@@ -3096,7 +3189,7 @@ case OP_Delete: {
 	if (opflags & OPFLAG_NCHANGE)
 		p->nChange++;
 
-	break;
+	DISPATCH();
 }
 /* Opcode: ResetCount * * * * *
  *
@@ -3105,11 +3198,11 @@ case OP_Delete: {
  * Then the VMs internal change counter resets to 0.
  * This is used by trigger programs.
  */
-case OP_ResetCount: {
+EXECUTE(OP_ResetCount): {
 	sqlVdbeSetChanges(p->nChange);
 	p->nChange = 0;
 	p->ignoreRaised = 0;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: SorterCompare P1 P2 P3 P4
@@ -3127,7 +3220,7 @@ case OP_ResetCount: {
  * Fall through to next instruction if the two records compare equal to
  * each other.  Jump to P2 if they are different.
  */
-case OP_SorterCompare: {
+EXECUTE(OP_SorterCompare): {
 			VdbeCursor *pC;
 			int res;
 			int nKeyCol;
@@ -3140,7 +3233,7 @@ case OP_SorterCompare: {
 			if (sqlVdbeSorterCompare(pC, pIn3, nKeyCol, &res) != 0)
 				goto abort_due_to_error;
 			if (res) goto jump_to_p2;
-			break;
+			DISPATCH();
 		};
 
 /* Opcode: SorterData P1 P2 P3 * *
@@ -3155,7 +3248,7 @@ case OP_SorterCompare: {
  * parameter P3.  Clearing the P3 column cache as part of this opcode saves
  * us from having to issue a separate NullRow instruction to clear that cache.
  */
-case OP_SorterData: {
+EXECUTE(OP_SorterData): {
 	VdbeCursor *pC;
 
 	pOut = vdbe_prepare_null_out(p, pOp->p2);
@@ -3166,7 +3259,7 @@ case OP_SorterData: {
 	assert(mem_is_bin(pOut));
 	assert(pOp->p1>=0 && pOp->p1<p->nCursor);
 	p->apCsr[pOp->p3]->cacheStatus = CACHE_STALE;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: RowData P1 P2 * * P5
@@ -3186,7 +3279,7 @@ case OP_SorterData: {
  * If the P1 cursor must be pointing to a valid row (not a NULL row)
  * of a real table, not a pseudo-table.
  */
-case OP_RowData: {
+EXECUTE(OP_RowData): {
 	VdbeCursor *pC;
 	BtCursor *pCrsr;
 	u32 n;
@@ -3233,7 +3326,7 @@ case OP_RowData: {
 	assert(sqlVdbeCheckMemInvariants(pOut));
 	UPDATE_MAX_BLOBSIZE(pOut);
 	REGISTER_TRACE(p, pOp->p2, pOut);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: NullRow P1 * * * *
@@ -3242,7 +3335,7 @@ case OP_RowData: {
  * that occur while the cursor is on the null row will always
  * write a NULL.
  */
-case OP_NullRow: {
+EXECUTE(OP_NullRow): {
 	VdbeCursor *pC;
 
 	assert(pOp->p1>=0 && pOp->p1<p->nCursor);
@@ -3254,7 +3347,7 @@ case OP_NullRow: {
 		assert(pC->uc.pCursor!=0);
 		sql_cursor_cleanup(pC->uc.pCursor);
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Last P1 P2 P3 * *
@@ -3276,7 +3369,7 @@ case OP_NullRow: {
  * be pointing at the end of the btree and so no changes are made to
  * the cursor.
  */
-case OP_Last: {        /* jump */
+EXECUTE(OP_Last): {        /* jump */
 	VdbeCursor *pC;
 	BtCursor *pCrsr;
 	int res;
@@ -3302,7 +3395,7 @@ case OP_Last: {        /* jump */
 	} else {
 		assert(pOp->p2==0);
 	}
-	break;
+	DISPATCH();
 }
 
 
@@ -3327,14 +3420,16 @@ case OP_Last: {        /* jump */
  * regression tests can determine whether or not the optimizer is
  * correctly optimizing out sorts.
  */
-case OP_SorterSort:    /* jump */
-case OP_Sort: {        /* jump */
+EXECUTE(OP_SorterSort):    /* jump */
+EXECUTE(OP_Sort): {        /* jump */
 #ifdef SQL_TEST
 			sql_sort_count++;
 			sql_search_count--;
 #endif
 			/* Fall through into OP_Rewind */
+#ifndef SQL_USE_GOTO
 			FALLTHROUGH;
+#endif /* SQL_USE_GOTO */
 		}
 /* Opcode: Rewind P1 P2 * * *
  *
@@ -3348,7 +3443,7 @@ case OP_Sort: {        /* jump */
  * from the beginning toward the end.  In other words, the cursor is
  * configured to use Next, not Prev.
  */
-case OP_Rewind: {        /* jump */
+EXECUTE(OP_Rewind): {        /* jump */
 	VdbeCursor *pC;
 	BtCursor *pCrsr;
 	int res;
@@ -3375,7 +3470,7 @@ case OP_Rewind: {        /* jump */
 	pC->nullRow = (u8)res;
 	assert(pOp->p2>0 && pOp->p2<p->nOp);
 	if (res) goto jump_to_p2;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Next P1 P2 P3 P4 P5
@@ -3446,7 +3541,7 @@ case OP_Rewind: {        /* jump */
  * invoked.  This opcode advances the cursor to the next sorted
  * record, or jumps to P2 if there are no more sorted records.
  */
-case OP_SorterNext: {  /* jump */
+EXECUTE(OP_SorterNext): {  /* jump */
 	VdbeCursor *pC;
 	int res;
 
@@ -3456,12 +3551,14 @@ case OP_SorterNext: {  /* jump */
 	if (sqlVdbeSorterNext(pC, &res) != 0)
 		goto abort_due_to_error;
 	goto next_tail;
-case OP_PrevIfOpen:    /* jump */
-case OP_NextIfOpen:    /* jump */
-	if (p->apCsr[pOp->p1]==0) break;
+EXECUTE(OP_PrevIfOpen):    /* jump */
+EXECUTE(OP_NextIfOpen):    /* jump */
+	if (p->apCsr[pOp->p1] == 0) {
+		DISPATCH();
+	}
 	/* Fall through */
-case OP_Prev:          /* jump */
-case OP_Next:          /* jump */
+EXECUTE(OP_Prev):          /* jump */
+EXECUTE(OP_Next):          /* jump */
 	assert(pOp->p1>=0 && pOp->p1<p->nCursor);
 	pC = p->apCsr[pOp->p1];
 	res = pOp->p3;
@@ -3496,7 +3593,7 @@ case OP_Next:          /* jump */
 	} else {
 		pC->nullRow = 1;
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: SorterInsert P1 P2 * * *
@@ -3506,7 +3603,7 @@ case OP_Next:          /* jump */
  * MakeRecord instructions.  This opcode writes that key
  * into the sorter P1.  Data for the entry is nil.
  */
-case OP_SorterInsert: {      /* in2 */
+EXECUTE(OP_SorterInsert): {      /* in2 */
 	assert(pOp->p1 >= 0 && pOp->p1 < p->nCursor);
 	struct VdbeCursor *cursor = p->apCsr[pOp->p1];
 	assert(cursor != NULL);
@@ -3515,7 +3612,7 @@ case OP_SorterInsert: {      /* in2 */
 	assert(mem_is_bin(pIn2));
 	if (sqlVdbeSorterWrite(cursor, pIn2) != 0)
 		goto abort_due_to_error;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: IdxInsert P1 P2 P3 * P5
@@ -3540,8 +3637,8 @@ case OP_SorterInsert: {      /* in2 */
  * This opcode works exactly as IdxInsert does, but in Tarantool
  * internals it invokes box_replace() instead of box_insert().
  */
-case OP_IdxReplace:
-case OP_IdxInsert: {
+EXECUTE(OP_IdxReplace):
+EXECUTE(OP_IdxInsert): {
 	pIn2 = &aMem[pOp->p1];
 	assert(mem_is_bin(pIn2));
 	struct space *space = aMem[pOp->p2].u.p;
@@ -3571,7 +3668,7 @@ case OP_IdxInsert: {
 			rc = 0;
 			if (p->pFrame != NULL)
 				p->ignoreRaised++;
-			break;
+			DISPATCH();
 		}
 		if ((pOp->p5 & OPFLAG_OE_FAIL) != 0) {
 			p->errorAction = ON_CONFLICT_ACTION_FAIL;
@@ -3590,7 +3687,7 @@ case OP_IdxInsert: {
 		if (vdbe_add_new_autoinc_id(p, value) != 0)
 			goto abort_due_to_error;
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Update P1 P2 P3 P4 P5
@@ -3619,7 +3716,7 @@ case OP_IdxInsert: {
  *           INGORE statement. Thus, in case of conflict we don't
  *           raise an error.
  */
-case OP_Update: {
+EXECUTE(OP_Update): {
 	struct Mem *new_tuple = &aMem[pOp->p1];
 	if (pOp->p5 & OPFLAG_NCHANGE)
 		p->nChange++;
@@ -3684,7 +3781,7 @@ case OP_Update: {
 	}
 	if (rc != 0)
 		goto abort_due_to_error;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: SInsert P1 P2 * * P5
@@ -3699,7 +3796,7 @@ case OP_Update: {
  * If P5 is set to OPFLAG_NCHANGE, account overall changes
  * made to database.
  */
-case OP_SInsert: {
+EXECUTE(OP_SInsert): {
 	assert(pOp->p1 > 0);
 	assert(pOp->p2 >= 0);
 
@@ -3712,7 +3809,7 @@ case OP_SInsert: {
 		goto abort_due_to_error;
 	if (pOp->p5 & OPFLAG_NCHANGE)
 		p->nChange++;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: SDelete P1 P2 P3 * P5
@@ -3725,7 +3822,7 @@ case OP_SInsert: {
  * If P5 is set to OPFLAG_NCHANGE, account overall changes
  * made to database.
  */
-case OP_SDelete: {
+EXECUTE(OP_SDelete): {
 	assert(pOp->p1 > 0);
 	assert(pOp->p2 >= 0);
 	assert(pOp->p3 >= 0);
@@ -3739,7 +3836,7 @@ case OP_SDelete: {
 		goto abort_due_to_error;
 	if (pOp->p5 & OPFLAG_NCHANGE)
 		p->nChange++;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: IdxDelete P1 P2 P3 * *
@@ -3749,7 +3846,7 @@ case OP_SDelete: {
  * an unpacked index key. This opcode removes that entry from the
  * index opened by cursor P1.
  */
-case OP_IdxDelete: {
+EXECUTE(OP_IdxDelete): {
 	VdbeCursor *pC;
 	BtCursor *pCrsr;
 	int res;
@@ -3779,7 +3876,7 @@ case OP_IdxDelete: {
 	}
 	pC->cacheStatus = CACHE_STALE;
 	pC->seekResult = 0;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: IdxGE P1 P2 P3 P4 P5
@@ -3826,10 +3923,10 @@ case OP_IdxDelete: {
  * If the P1 index entry is less than or equal to the key value then jump
  * to P2. Otherwise fall through to the next instruction.
  */
-case OP_IdxLE:          /* jump */
-case OP_IdxGT:          /* jump */
-case OP_IdxLT:          /* jump */
-case OP_IdxGE:  {       /* jump */
+EXECUTE(OP_IdxLE):          /* jump */
+EXECUTE(OP_IdxGT):          /* jump */
+EXECUTE(OP_IdxLT):          /* jump */
+EXECUTE(OP_IdxGE): {       /* jump */
 	VdbeCursor *pC;
 	UnpackedRecord r;
 
@@ -3864,7 +3961,7 @@ case OP_IdxGE:  {       /* jump */
 	}
 	if (res > 0)
 		goto jump_to_p2;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Clear P1 P2 * * P5
@@ -3879,7 +3976,7 @@ case OP_IdxGE:  {       /* jump */
  * If the OPFLAG_NCHANGE flag is set, then the row change count
  * is incremented by the number of deleted tuples.
  */
-case OP_Clear: {
+EXECUTE(OP_Clear): {
 	assert(pOp->p1 > 0);
 	uint32_t space_id = pOp->p1;
 	struct space *space = space_by_id(space_id);
@@ -3894,7 +3991,7 @@ case OP_Clear: {
 		if ((pOp->p5 & OPFLAG_NCHANGE) != 0)
 			p->nChange += tuple_count;
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: ResetSorter P1 * * * *
@@ -3905,7 +4002,7 @@ case OP_Clear: {
  * This opcode only works for cursors used for sorting and
  * opened with OP_OpenEphemeral or OP_SorterOpen.
  */
-case OP_ResetSorter: {
+EXECUTE(OP_ResetSorter): {
 	VdbeCursor *pC;
 
 	assert(pOp->p1>=0 && pOp->p1<p->nCursor);
@@ -3919,7 +4016,7 @@ case OP_ResetSorter: {
 		if (tarantoolsqlEphemeralClearTable(pC->uc.pCursor) != 0)
 			goto abort_due_to_error;
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: RenameTable P1 * * P4 *
@@ -3934,7 +4031,7 @@ case OP_ResetSorter: {
  * are also updated in _trigger and in parent table.
  *
  */
-case OP_RenameTable: {
+EXECUTE(OP_RenameTable): {
 	uint32_t space_id;
 	struct space *space;
 	char *zOldTableName;
@@ -3971,7 +4068,7 @@ case OP_RenameTable: {
 		trigger = next_trigger;
 	}
 	sql_xfree(zOldTableName);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: LoadAnalysis P1 * * * *
@@ -3980,14 +4077,14 @@ case OP_RenameTable: {
  * of that table into the internal index hash table.  This will cause
  * the analysis to be used when preparing all subsequent queries.
  */
-case OP_LoadAnalysis: {
+EXECUTE(OP_LoadAnalysis): {
 	assert(pOp->p1==0 );
 	/* TODO: Enable analysis. */
 	/*
 	if (sql_analysis_load(db) != 0)
 		goto abort_due_to_error;
 	*/
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Program P1 P2 P3 P4 P5
@@ -4005,7 +4102,7 @@ case OP_LoadAnalysis: {
  *
  * If P5 is non-zero, then recursive program invocation is enabled.
  */
-case OP_Program: {        /* jump */
+EXECUTE(OP_Program): {        /* jump */
 	int nMem;               /* Number of memory registers for sub-program */
 	int nByte;              /* Bytes of runtime space required for sub-program */
 	Mem *pRt;               /* Register to allocate runtime space */
@@ -4034,11 +4131,13 @@ case OP_Program: {        /* jump */
 	if (pOp->p5) {
 		t = pProgram->token;
 		for(pFrame=p->pFrame; pFrame && pFrame->token!=t; pFrame=pFrame->pParent);
-		if (pFrame) break;
+		if (pFrame) {
+			DISPATCH();
+		}
 	}
 
 	if (p->ignoreRaised > 0) {
-		break;
+		DISPATCH();
 	}
 
 	if (p->nFrame >= SQL_MAX_TRIGGER_DEPTH) {
@@ -4106,7 +4205,7 @@ case OP_Program: {        /* jump */
 	p->nOp = pProgram->nOp;
 	pOp = &aOp[-1];
 
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Param P1 P2 * * *
@@ -4121,15 +4220,48 @@ case OP_Program: {        /* jump */
  * the value of the P1 argument to the value of the P1 argument to the
  * calling OP_Program instruction.
  */
-case OP_Param: {           /* out2 */
+EXECUTE(OP_Param): {           /* out2 */
 	VdbeFrame *pFrame;
 	Mem *pIn;
 	pOut = vdbe_prepare_null_out(p, pOp->p2);
 	pFrame = p->pFrame;
 	pIn = &pFrame->aMem[pOp->p1 + pFrame->aOp[pFrame->pc].p1];
 	mem_copy_as_ephemeral(pOut, pIn);
-	break;
+	DISPATCH();
 }
+
+#if 0
+/* Opcode: FkCounter P1 P2 * * *
+ * Synopsis: fkctr[P1]+=P2
+ *
+ * Increment a "constraint counter" by P2 (P2 may be negative or positive).
+ * If P1 is non-zero, the database constraint counter is incremented
+ * (deferred foreign key constraints). Otherwise, if P1 is zero, the
+ * statement counter is incremented (immediate foreign key constraints).
+ */
+NEXECUTE (OP_FkCounter): {
+	p->nFkConstraint += pOp->p2;
+	DISPATCH();
+}
+
+/* Opcode: FkIfZero P1 P2 * * *
+ * Synopsis: if fkctr[P1]==0 goto P2
+ *
+ * This opcode tests if a foreign key constraint-counter is currently zero.
+ * If so, jump to instruction P2. Otherwise, fall through to the next
+ * instruction.
+ *
+ * If P1 is non-zero, then the jump is taken if the database constraint-counter
+ * is zero (the one that counts deferred constraint violations). If P1 is
+ * zero, the jump is taken if the statement constraint-counter is zero
+ * (immediate foreign key constraint violations).
+ */
+NEXECUTE (OP_FkIfZero): {         /* jump */
+	if (p->nFkConstraint == 0)
+		goto jump_to_p2;
+	DISPATCH();
+}
+#endif
 
 /* Opcode: IfPos P1 P2 P3 * *
  * Synopsis: if r[P1]>0 then r[P1]-=P3, goto P2
@@ -4141,7 +4273,7 @@ case OP_Param: {           /* out2 */
  * If the initial value of register P1 is less than 1, then the
  * value is unchanged and control passes through to the next instruction.
  */
-case OP_IfPos: {        /* jump, in1 */
+EXECUTE(OP_IfPos): {        /* jump, in1 */
 	pIn1 = &aMem[pOp->p1];
 	assert(mem_is_int(pIn1));
 	if (mem_is_uint(pIn1) && pIn1->u.u != 0) {
@@ -4156,7 +4288,7 @@ case OP_IfPos: {        /* jump, in1 */
 		pIn1->u.u = res;
 		goto jump_to_p2;
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: OffsetLimit P1 P2 P3 * *
@@ -4173,7 +4305,7 @@ case OP_IfPos: {        /* jump, in1 */
  * sum is larger than 2^63-1 (i.e. overflow takes place) then
  * error is raised.
  */
-case OP_OffsetLimit: {    /* in1, out2, in3 */
+EXECUTE(OP_OffsetLimit): {    /* in1, out2, in3 */
 	pIn1 = &aMem[pOp->p1];
 	pIn3 = &aMem[pOp->p3];
 	pOut = vdbe_prepare_null_out(p, pOp->p2);
@@ -4189,7 +4321,7 @@ case OP_OffsetLimit: {    /* in1, out2, in3 */
 		goto abort_due_to_error;
 	}
 	mem_set_uint(pOut, x);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: IfNotZero P1 P2 * * *
@@ -4200,14 +4332,14 @@ case OP_OffsetLimit: {    /* in1, out2, in3 */
  * If it is non-zero (negative or positive) and then also jump to P2.
  * If register P1 is initially zero, leave it unchanged and fall through.
  */
-case OP_IfNotZero: {        /* jump, in1 */
+EXECUTE(OP_IfNotZero): {        /* jump, in1 */
 	pIn1 = &aMem[pOp->p1];
 	assert(mem_is_uint(pIn1));
 	if (pIn1->u.u > 0) {
 		pIn1->u.u--;
 		goto jump_to_p2;
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: DecrJumpZero P1 P2 * * *
@@ -4216,13 +4348,13 @@ case OP_IfNotZero: {        /* jump, in1 */
  * Register P1 must hold an integer.  Decrement the value in P1
  * and jump to P2 if the new value is exactly zero.
  */
-case OP_DecrJumpZero: {      /* jump, in1 */
+EXECUTE(OP_DecrJumpZero): {      /* jump, in1 */
 	pIn1 = &aMem[pOp->p1];
 	assert(mem_is_uint(pIn1));
 	if (pIn1->u.u > 0)
 		pIn1->u.u--;
 	if (pIn1->u.u == 0) goto jump_to_p2;
-	break;
+	DISPATCH();
 }
 
 
@@ -4237,7 +4369,7 @@ case OP_DecrJumpZero: {      /* jump, in1 */
  * The P1 arguments are taken from register P2 and its
  * successors.
  */
-case OP_AggStep: {
+EXECUTE(OP_AggStep): {
 	int argc = pOp->p1;
 	sql_context *pCtx;
 	Mem *pMem;
@@ -4267,7 +4399,7 @@ case OP_AggStep: {
 		int i = pOp[-1].p1;
 		if (i) mem_set_bool(&aMem[i], true);
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: AggFinal P1 * * P4 *
@@ -4276,7 +4408,7 @@ case OP_AggStep: {
  * Execute the finalizer function for an aggregate. P1 is the memory location
  * that is the accumulator for the aggregate. P4 is a pointer to the function.
  */
-case OP_AggFinal: {
+EXECUTE(OP_AggFinal): {
 	assert(pOp->p1>0 && pOp->p1<=(p->nMem+1 - p->nCursor));
 	struct func_sql_builtin *func = (struct func_sql_builtin *)pOp->p4.func;
 	struct Mem *pIn1 = &aMem[pOp->p1];
@@ -4286,7 +4418,7 @@ case OP_AggFinal: {
 	UPDATE_MAX_BLOBSIZE(pIn1);
 	if (sqlVdbeMemTooBig(pIn1) != 0)
 		goto too_big;
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Expire P1 * * * *
@@ -4296,13 +4428,13 @@ case OP_AggFinal: {
  * If P1 is 0, then all SQL statements become expired. If P1 is non-zero,
  * then only the currently executing statement is expired.
  */
-case OP_Expire: {
+EXECUTE(OP_Expire): {
 	if (!pOp->p1) {
 		sqlExpirePreparedStatements();
 	} else {
 		p->expired = 1;
 	}
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Init P1 P2 * P4 *
@@ -4320,7 +4452,7 @@ case OP_Expire: {
  * Increment the value of P1 so that OP_Once opcodes will jump the
  * first time they are evaluated for this run.
  */
-case OP_Init: {          /* jump */
+EXECUTE(OP_Init): {          /* jump */
 	char *zTrace;
 	int i;
 
@@ -4346,7 +4478,7 @@ case OP_Init: {          /* jump */
 	if (p->pFrame == NULL && sql_vdbe_prepare(p) != 0) {
 		sql_xfree(p);
 		rc = -1;
-		break;
+		DISPATCH();
 	}
 
 	if ((db->mTrace & SQL_TRACE_STMT)!=0
@@ -4380,14 +4512,14 @@ case OP_Init: {          /* jump */
  * specified by first operand. It is system opcode and must be used only
  * during DDL routine.
  */
-case OP_GenSpaceid: {
+EXECUTE(OP_GenSpaceid): {
 	assert(pOp->p1 > 0);
 	pOut = vdbe_prepare_null_out(p, pOp->p1);
 	uint32_t u;
 	if (box_generate_space_id(&u, false) != 0)
 		goto abort_due_to_error;
 	mem_set_uint(pOut, u);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: SetSession P1 * * P4 *
@@ -4395,7 +4527,7 @@ case OP_GenSpaceid: {
  * Set new value of the session setting. P4 is the name of the
  * setting being updated, P1 is the register holding a value.
  */
-case OP_SetSession: {
+EXECUTE(OP_SetSession): {
 	assert(pOp->p4type == P4_DYNAMIC);
 	const char *setting_name = pOp->p4.z;
 	int sid = session_setting_find(setting_name);
@@ -4440,7 +4572,7 @@ case OP_SetSession: {
 		goto abort_due_to_error;
 	}
 	p->nChange++;
-	break;
+	DISPATCH();
 }
 
 /**
@@ -4451,11 +4583,11 @@ case OP_SetSession: {
  * P2. All errors detected during the construction of the description are set to
  * register P2 + 1.
  */
-case OP_ShowCreateTable: {
+EXECUTE(OP_ShowCreateTable): {
 	struct Mem *ret = &aMem[pOp->p2];
 	struct Mem *err = &aMem[pOp->p2 + 1];
 	sql_show_create_table(aMem[pOp->p1].u.i, ret, err);
-	break;
+	DISPATCH();
 }
 
 /* Opcode: Noop * * * * *
@@ -4469,9 +4601,10 @@ case OP_ShowCreateTable: {
  * This opcode records information from the optimizer.  It is the
  * the same as a no-op.  This opcodesnever appears in a real VM program.
  */
-default: {          /* This is really OP_Noop and OP_Explain */
-	assert(pOp->opcode==OP_Noop || pOp->opcode==OP_Explain);
-	break;
+
+EXECUTE(OP_Noop):
+EXECUTE(OP_Explain): {
+	DISPATCH();
 }
 
 /*****************************************************************************
@@ -4481,31 +4614,6 @@ default: {          /* This is really OP_Noop and OP_Explain */
  * restored.
  ****************************************************************************/
 		}
-
-		/* The following code adds nothing to the actual functionality
-		 * of the program.  It is only here for testing and debugging.
-		 * On the other hand, it does burn CPU cycles every time through
-		 * the evaluator loop.  So we can leave it out when NDEBUG is defined.
-		 */
-#ifndef NDEBUG
-		assert(pOp>=&aOp[-1] && pOp<&aOp[p->nOp-1]);
-
-#ifdef SQL_DEBUG
-		if ((p->sql_flags & SQL_VdbeTrace) != 0) {
-			u8 opProperty = sqlOpcodeProperty[pOrigOp->opcode];
-			if (rc!=0) printf("rc=%d\n",rc);
-			if ((opProperty & OPFLG_OUT2) != 0) {
-				REGISTER_TRACE(p, pOrigOp->p2,
-					       &aMem[pOrigOp->p2]);
-			}
-			if ((opProperty & OPFLG_OUT3) != 0) {
-				REGISTER_TRACE(p, pOrigOp->p3,
-					       &aMem[pOrigOp->p3]);
-			}
-		}
-#endif  /* SQL_DEBUG */
-#endif  /* NDEBUG */
-	}  /* The end of the for(;;) loop the loops through opcodes */
 
 	/* If we reach this point, it means that execution is finished with
 	 * an error of some kind.

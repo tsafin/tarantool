@@ -144,6 +144,16 @@ test-debug-asan: TEST_RUN_PARAMS += --test-timeout 620 \
                                     --server-start-timeout 610
 test-debug-asan: build run-luajit-test run-test
 
+# Release vdbe goto dispatch build
+
+.PHONY: test-release-goto-dispatch
+test-release-goto-dispatch: CMAKE_PARAMS = -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+                                           -DENABLE_WERROR=ON \
+                                           -DTEST_BUILD=ON \
+										   -DENABLE_VDBE_GOTO_DISPATCH=ON
+
+test-release-goto-dispatch: build run-luajit-test run-test
+
 # Debug build
 
 .PHONY: test-debug
