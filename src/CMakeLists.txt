@@ -193,7 +193,8 @@ target_link_libraries(server core coll http_parser bit uri uuid swim swim_udp
 # Rule of thumb: if exporting a symbol from a static library, list the
 # library here.
 set (reexport_libraries server core misc bitset csv swim swim_udp swim_ev
-     shutdown ${LUAJIT_LIBRARIES} ${MSGPUCK_LIBRARIES} ${ICU_LIBRARIES} ${CURL_LIBRARIES} ${XXHASH_LIBRARIES})
+     shutdown ${LUAJIT_LIBRARIES} ${MSGPUCK_LIBRARIES} ${ICU_LIBRARIES}
+     ${CURL_LIBRARIES} ${XXHASH_LIBRARIES} ${LIBCDT_LIBRARIES})
 
 set (common_libraries
     ${reexport_libraries}
