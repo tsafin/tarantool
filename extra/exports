@@ -149,6 +149,7 @@ csv_iterator_create
 csv_next
 csv_setopt
 datetime_now
+datetime_pack
 datetime_strftime
 datetime_to_string
 datetime_unpack
@@ -374,6 +375,7 @@ mp_decode_uint
 mp_encode_array
 mp_encode_bin
 mp_encode_bool
+mp_encode_datetime
 mp_encode_decimal
 mp_encode_double
 mp_encode_float
@@ -390,6 +392,7 @@ mp_next
 mp_next_slowpath
 mp_parser_hint
 mp_sizeof_array
+mp_sizeof_datetime
 mp_sizeof_decimal
 mp_sizeof_str
 mp_sizeof_uuid
