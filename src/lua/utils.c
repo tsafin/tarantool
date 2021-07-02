@@ -241,7 +241,6 @@ luaL_setcdatagc(struct lua_State *L, int idx)
 	lua_pop(L, 1);
 }
 
-
 /**
  * A helper to register a single type metatable.
  */
