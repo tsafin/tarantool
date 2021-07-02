@@ -30,9 +30,10 @@
  * SUCH DAMAGE.
  */
 
-#include <c-dt/dt_core.h>
+#include <c-dt/dt.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 #if defined(__cplusplus)
 extern "C" {
@@ -60,6 +61,38 @@ struct datetime_interval_t {
 	int32_t nsec; ///< nanoseconds delta
 };
 
+int
+datetime_compare(const struct datetime_t * lhs,
+		 const struct datetime_t * rhs);
+
+
+struct datetime_t *
+datetime_unpack(const char **data, uint32_t len, struct datetime_t *date);
+
+/**
+ * Pack datetime_t data to the MessagePack buffer.
+ */
+char *
+datetime_pack(char *data, const struct datetime_t *date);
+
+/**
+ * Calculate size of MessagePack buffer for datetime_t data.
+ */
+uint32_t
+mp_sizeof_datetime(const struct datetime_t *date);
+
+/**
+ * Decode data from MessagePack buffer to datetime_t structure.
+ */
+struct datetime_t *
+mp_decode_datetime(const char **data, struct datetime_t *date);
+
+/**
+ * Encode datetime_t structure to the MessagePack buffer.
+ */
+char *
+mp_encode_datetime(char *data, const struct datetime_t *date);
+
 /**
  * Convert datetime to string using default format
  * @param date source datetime value
@@ -68,6 +101,12 @@ struct datetime_interval_t {
  */
 int
 datetime_to_string(const struct datetime_t * date, char *buf, uint32_t len);
+
+int
+mp_snprint_datetime(char *buf, int size, const char **data, uint32_t len);
+
+int
+mp_fprint_datetime(FILE *file, const char **data, uint32_t len);
 
 #if defined(__cplusplus)
 } /* extern "C" */
