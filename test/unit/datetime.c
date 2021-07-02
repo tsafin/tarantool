@@ -139,7 +139,6 @@ exit:
 // avoid introducing external datetime.h dependency
 // - just copy paste it for today
 #define SECS_PER_DAY      86400
-#define NANOS_PER_SEC     1000000000
 #define DT_EPOCH_1970_OFFSET 719163
 
 
