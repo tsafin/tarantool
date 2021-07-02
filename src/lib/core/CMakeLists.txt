@@ -30,6 +30,7 @@ set(core_sources
     decimal.c
     mp_decimal.c
     cord_buf.c
+    mp_datetime.c
 )
 
 if (TARGET_OS_NETBSD)
@@ -43,7 +44,8 @@ add_library(core STATIC ${core_sources})
 
 target_link_libraries(core salad small uri decNumber bit ${LIBEV_LIBRARIES}
                       ${LIBEIO_LIBRARIES} ${LIBCORO_LIBRARIES}
-                      ${MSGPUCK_LIBRARIES} ${ICU_LIBRARIES})
+                      ${MSGPUCK_LIBRARIES} ${ICU_LIBRARIES}
+                      ${LIBCDT_LIBRARIES})
 
 if (ENABLE_BACKTRACE AND NOT TARGET_OS_DARWIN)
     target_link_libraries(core gcc_s ${UNWIND_LIBRARIES})
