@@ -36,6 +36,7 @@
 #include "lib/core/decimal.h"
 #include "lib/core/mp_decimal.h"
 #include "uuid/mp_uuid.h"
+#include "lib/core/mp_datetime.h"
 #include "lib/core/mp_extension_types.h"
 
 /* {{{ tuple_compare */
@@ -76,6 +77,7 @@ enum mp_class {
 	MP_CLASS_STR,
 	MP_CLASS_BIN,
 	MP_CLASS_UUID,
+	MP_CLASS_DATETIME,
 	MP_CLASS_ARRAY,
 	MP_CLASS_MAP,
 	mp_class_max,
@@ -99,6 +101,8 @@ static enum mp_class mp_ext_classes[] = {
 	/* .MP_UNKNOWN_EXTENSION = */ mp_class_max, /* unsupported */
 	/* .MP_DECIMAL		 = */ MP_CLASS_NUMBER,
 	/* .MP_UUID		 = */ MP_CLASS_UUID,
+	/* .MP_ERROR		 = */ mp_class_max,
+	/* .MP_DATETIME		 = */ MP_CLASS_DATETIME,
 };
 
 static enum mp_class
@@ -390,6 +394,19 @@ mp_compare_uuid(const char *field_a, const char *field_b)
 	return memcmp(field_a + 2, field_b + 2, UUID_PACKED_LEN);
 }
 
+static int
+mp_compare_datetime(const char *lhs, const char *rhs)
+{
+	struct datetime lhs_dt, rhs_dt;
+	struct datetime *ret;
+	ret = mp_decode_datetime(&lhs, &lhs_dt);
+	assert(ret != NULL);
+	ret = mp_decode_datetime(&rhs, &rhs_dt);
+	assert(ret != NULL);
+	(void)ret;
+	return datetime_compare(&lhs_dt, &rhs_dt);
+}
+
 typedef int (*mp_compare_f)(const char *, const char *);
 static mp_compare_f mp_class_comparators[] = {
 	/* .MP_CLASS_NIL    = */ NULL,
@@ -398,6 +415,7 @@ static mp_compare_f mp_class_comparators[] = {
 	/* .MP_CLASS_STR    = */ mp_compare_str,
 	/* .MP_CLASS_BIN    = */ mp_compare_bin,
 	/* .MP_CLASS_UUID   = */ mp_compare_uuid,
+	/* .MP_CLASS_DATETIME=*/ mp_compare_datetime,
 	/* .MP_CLASS_ARRAY  = */ NULL,
 	/* .MP_CLASS_MAP    = */ NULL,
 };
@@ -478,6 +496,8 @@ tuple_compare_field(const char *field_a, const char *field_b,
 		return mp_compare_decimal(field_a, field_b);
 	case FIELD_TYPE_UUID:
 		return mp_compare_uuid(field_a, field_b);
+	case FIELD_TYPE_DATETIME:
+		return mp_compare_datetime(field_a, field_b);
 	default:
 		unreachable();
 		return 0;

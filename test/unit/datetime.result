@@ -1,4 +1,4 @@
-1..1
+1..4
     1..355
     ok 1 - correct parse_datetime return value for '2012-12-24 15:30Z'
     ok 2 - correct parse_datetime output seconds for '2012-12-24 15:30Z
@@ -356,3 +356,116 @@
     ok 354 - correct parse_datetime return value for '2012-12-24 15:30:00'
     ok 355 - reversible seconds via strftime for '2012-12-24 15:30:00
 ok 1 - subtests
+    1..15
+    ok 1 - string '1970-01-01T02:00+02:00' expected, received '1970-01-01T02:00+02:00'
+    ok 2 - string '1970-01-01T01:30+01:30' expected, received '1970-01-01T01:30+01:30'
+    ok 3 - string '1970-01-01T01:00+01:00' expected, received '1970-01-01T01:00+01:00'
+    ok 4 - string '1970-01-01T00:01+00:01' expected, received '1970-01-01T00:01+00:01'
+    ok 5 - string '1970-01-01T00:00Z' expected, received '1970-01-01T00:00Z'
+    ok 6 - string '1969-12-31T23:59-00:01' expected, received '1969-12-31T23:59-00:01'
+    ok 7 - string '1969-12-31T23:00-01:00' expected, received '1969-12-31T23:00-01:00'
+    ok 8 - string '1969-12-31T22:30-01:30' expected, received '1969-12-31T22:30-01:30'
+    ok 9 - string '1969-12-31T22:00-02:00' expected, received '1969-12-31T22:00-02:00'
+    ok 10 - string '1970-01-01T00:00:00.123456789Z' expected, received '1970-01-01T00:00:00.123456789Z'
+    ok 11 - string '1970-01-01T00:00:00.123456Z' expected, received '1970-01-01T00:00:00.123456Z'
+    ok 12 - string '1970-01-01T00:00:00.123Z' expected, received '1970-01-01T00:00:00.123Z'
+    ok 13 - string '1973-11-29T21:33:09Z' expected, received '1973-11-29T21:33:09Z'
+    ok 14 - string '2013-10-28T17:51:56Z' expected, received '2013-10-28T17:51:56Z'
+    ok 15 - string '9999-12-31T23:59:59Z' expected, received '9999-12-31T23:59:59Z'
+ok 2 - subtests
+    1..85
+    ok 1 - len 6, expected len 6
+    ok 2 - mp_sizeof_datetime(6) == encoded length 6
+    ok 3 - mp_decode_datetime() return code
+    ok 4 - mp_sizeof_uuid() == decoded length
+    ok 5 - datetime_compare(&date, &ret)
+    ok 6 - len 6, expected len 6
+    ok 7 - mp_sizeof_datetime(6) == encoded length 6
+    ok 8 - mp_decode_datetime() return code
+    ok 9 - mp_sizeof_uuid() == decoded length
+    ok 10 - datetime_compare(&date, &ret)
+    ok 11 - len 6, expected len 6
+    ok 12 - mp_sizeof_datetime(6) == encoded length 6
+    ok 13 - mp_decode_datetime() return code
+    ok 14 - mp_sizeof_uuid() == decoded length
+    ok 15 - datetime_compare(&date, &ret)
+    ok 16 - len 6, expected len 6
+    ok 17 - mp_sizeof_datetime(6) == encoded length 6
+    ok 18 - mp_decode_datetime() return code
+    ok 19 - mp_sizeof_uuid() == decoded length
+    ok 20 - datetime_compare(&date, &ret)
+    ok 21 - len 3, expected len 3
+    ok 22 - mp_sizeof_datetime(3) == encoded length 3
+    ok 23 - mp_decode_datetime() return code
+    ok 24 - mp_sizeof_uuid() == decoded length
+    ok 25 - datetime_compare(&date, &ret)
+    ok 26 - len 6, expected len 6
+    ok 27 - mp_sizeof_datetime(6) == encoded length 6
+    ok 28 - mp_decode_datetime() return code
+    ok 29 - mp_sizeof_uuid() == decoded length
+    ok 30 - datetime_compare(&date, &ret)
+    ok 31 - len 6, expected len 6
+    ok 32 - mp_sizeof_datetime(6) == encoded length 6
+    ok 33 - mp_decode_datetime() return code
+    ok 34 - mp_sizeof_uuid() == decoded length
+    ok 35 - datetime_compare(&date, &ret)
+    ok 36 - len 6, expected len 6
+    ok 37 - mp_sizeof_datetime(6) == encoded length 6
+    ok 38 - mp_decode_datetime() return code
+    ok 39 - mp_sizeof_uuid() == decoded length
+    ok 40 - datetime_compare(&date, &ret)
+    ok 41 - len 6, expected len 6
+    ok 42 - mp_sizeof_datetime(6) == encoded length 6
+    ok 43 - mp_decode_datetime() return code
+    ok 44 - mp_sizeof_uuid() == decoded length
+    ok 45 - datetime_compare(&date, &ret)
+    ok 46 - len 9, expected len 9
+    ok 47 - mp_sizeof_datetime(9) == encoded length 9
+    ok 48 - mp_decode_datetime() return code
+    ok 49 - mp_sizeof_uuid() == decoded length
+    ok 50 - datetime_compare(&date, &ret)
+    ok 51 - len 9, expected len 9
+    ok 52 - mp_sizeof_datetime(9) == encoded length 9
+    ok 53 - mp_decode_datetime() return code
+    ok 54 - mp_sizeof_uuid() == decoded length
+    ok 55 - datetime_compare(&date, &ret)
+    ok 56 - len 9, expected len 9
+    ok 57 - mp_sizeof_datetime(9) == encoded length 9
+    ok 58 - mp_decode_datetime() return code
+    ok 59 - mp_sizeof_uuid() == decoded length
+    ok 60 - datetime_compare(&date, &ret)
+    ok 61 - len 8, expected len 8
+    ok 62 - mp_sizeof_datetime(8) == encoded length 8
+    ok 63 - mp_decode_datetime() return code
+    ok 64 - mp_sizeof_uuid() == decoded length
+    ok 65 - datetime_compare(&date, &ret)
+    ok 66 - len 8, expected len 8
+    ok 67 - mp_sizeof_datetime(8) == encoded length 8
+    ok 68 - mp_decode_datetime() return code
+    ok 69 - mp_sizeof_uuid() == decoded length
+    ok 70 - datetime_compare(&date, &ret)
+    ok 71 - len 12, expected len 12
+    ok 72 - mp_sizeof_datetime(12) == encoded length 12
+    ok 73 - mp_decode_datetime() return code
+    ok 74 - mp_sizeof_uuid() == decoded length
+    ok 75 - datetime_compare(&date, &ret)
+    ok 76 - len 17, expected len 17
+    ok 77 - mp_sizeof_datetime(17) == encoded length 17
+    ok 78 - mp_decode_datetime() return code
+    ok 79 - mp_sizeof_uuid() == decoded length
+    ok 80 - datetime_compare(&date, &ret)
+    ok 81 - len 18, expected len 18
+    ok 82 - mp_sizeof_datetime(18) == encoded length 18
+    ok 83 - mp_decode_datetime() return code
+    ok 84 - mp_sizeof_uuid() == decoded length
+    ok 85 - datetime_compare(&date, &ret)
+ok 3 - subtests
+    1..5
+	*** mp_print_test ***
+    ok 1 - correct mp_snprint size 17 with empty buffer
+    ok 2 - correct mp_snprint size 17
+    ok 3 - correct mp_snprint result
+    ok 4 - correct mp_fprint size 17
+    ok 5 - correct mp_fprint result 17
+	*** mp_print_test: done ***
+ok 4 - subtests

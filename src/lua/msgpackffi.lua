@@ -26,6 +26,10 @@ char *
 mp_encode_uuid(char *data, const struct tt_uuid *uuid);
 uint32_t
 mp_sizeof_uuid();
+uint32_t
+mp_sizeof_datetime(const struct t_datetime_tz *date);
+char *
+mp_encode_datetime(char *data, const struct t_datetime_tz *date);
 float
 mp_decode_float(const char **data);
 double
@@ -36,6 +40,8 @@ decimal_t *
 decimal_unpack(const char **data, uint32_t len, decimal_t *dec);
 struct tt_uuid *
 uuid_unpack(const char **data, uint32_t len, struct tt_uuid *uuid);
+struct datetime *
+datetime_unpack(const char **data, uint32_t len, struct datetime *date);
 ]])
 
 local strict_alignment = (jit.arch == 'arm')
@@ -140,6 +146,11 @@ end
 local function encode_uuid(buf, uuid)
     local p = buf:alloc(builtin.mp_sizeof_uuid())
     builtin.mp_encode_uuid(p, uuid)
+end
+
+local function encode_datetime(buf, date)
+    local p = buf:alloc(builtin.mp_sizeof_datetime(date))
+    builtin.mp_encode_datetime(p, date)
 end
 
 local function encode_int(buf, num)
@@ -320,6 +331,7 @@ on_encode(ffi.typeof('float'), encode_float)
 on_encode(ffi.typeof('double'), encode_double)
 on_encode(ffi.typeof('decimal_t'), encode_decimal)
 on_encode(ffi.typeof('struct tt_uuid'), encode_uuid)
+on_encode(ffi.typeof('struct datetime'), encode_datetime)
 
 --------------------------------------------------------------------------------
 -- Decoder
@@ -512,6 +524,12 @@ local ext_decoder = {
         local uuid = ffi.new("struct tt_uuid")
         builtin.uuid_unpack(data, len, uuid)
         return uuid
+    end,
+    -- MP_DATETIME
+    [4] = function(data, len)
+        local dt = ffi.new("struct datetime")
+        builtin.datetime_unpack(data, len, dt)
+        return dt
     end,
 }
 
