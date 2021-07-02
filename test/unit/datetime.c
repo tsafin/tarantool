@@ -6,6 +6,9 @@
 
 #include "unit.h"
 #include "datetime.h"
+#include "mp_datetime.h"
+#include "msgpuck.h"
+#include "mp_extension_types.h"
 #include "trivia/util.h"
 
 static const char sample[] = "2012-12-24T15:30Z";
@@ -249,12 +252,131 @@ tostring_datetime_test(void)
 	check_plan();
 }
 
+static void
+mp_datetime_test()
+{
+	static struct {
+		int64_t     secs;
+		uint32_t    nsec;
+		uint32_t    offset;
+		uint32_t    len;
+	} tests[] = {
+		{/* '1970-01-01T02:00+02:00' */          0,         0,  120, 6},
+		{/* '1970-01-01T01:30+01:30' */          0,         0,   90, 6},
+		{/* '1970-01-01T01:00+01:00' */          0,         0,   60, 6},
+		{/* '1970-01-01T00:01+00:01' */          0,         0,    1, 6},
+		{/* '1970-01-01T00:00Z' */               0,         0,    0, 3},
+		{/* '1969-12-31T23:59-00:01' */          0,         0,   -1, 6},
+		{/* '1969-12-31T23:00-01:00' */          0,         0,  -60, 6},
+		{/* '1969-12-31T22:30-01:30' */          0,         0,  -90, 6},
+		{/* '1969-12-31T22:00-02:00' */          0,         0, -120, 6},
+		{/* '1970-01-01T00:00:00.123456789Z' */  0, 123456789,    0, 9},
+		{/* '1970-01-01T00:00:00.123456Z' */     0, 123456000,    0, 9},
+		{/* '1970-01-01T00:00:00.123Z' */        0, 123000000,    0, 9},
+		{/* '1973-11-29T21:33:09Z' */    123456789,         0,    0, 8},
+		{/* '2013-10-28T17:51:56Z' */   1382982716,         0,    0, 8},
+		{/* '9999-12-31T23:59:59Z' */ 253402300799,         0,    0, 12},
+		{/* '9999-12-31T23:59:59.123456789Z' */ 253402300799, 123456789, 0, 17},
+		{/* '9999-12-31T23:59:59.123456789-02:00' */ 253402300799, 123456789, -120, 18},
+	};
+	size_t index;
+
+	plan(68);
+	for (index = 0; index < lengthof(tests); index++) {
+		struct datetime date = {
+			tests[index].secs,
+			tests[index].nsec,
+			tests[index].offset
+		};
+		char buf[24], *data = buf;
+		const char *data1 = buf;
+		struct datetime ret;
+
+		char *end = mp_encode_datetime(data, &date);
+		uint32_t len = mp_sizeof_datetime(&date);
+		is(len, tests[index].len, "len %u, expected len %u",
+		   len, tests[index].len);
+		is(end - data, len,
+		   "mp_sizeof_datetime(%d) == encoded length %ld",
+		   len, end - data);
+
+		struct datetime *rc = mp_decode_datetime(&data1, &ret);
+		is(rc, &ret, "mp_decode_datetime() return code");
+		is(data1, end, "mp_sizeof_uuid() == decoded length");
+	}
+	check_plan();
+}
+
+
+static int
+mp_fprint_ext_test(FILE *file, const char **data, int depth)
+{
+	(void)depth;
+	int8_t type;
+	uint32_t len = mp_decode_extl(data, &type);
+	if (type != MP_DATETIME)
+		return fprintf(file, "undefined");
+	return mp_fprint_datetime(file, data, len);
+}
+
+static int
+mp_snprint_ext_test(char *buf, int size, const char **data, int depth)
+{
+        (void)depth;
+        int8_t type;
+        uint32_t len = mp_decode_extl(data, &type);
+        if (type != MP_DATETIME)
+                return snprintf(buf, size, "undefined");
+        return mp_snprint_datetime(buf, size, data, len);
+}
+
+static void
+mp_print_test(void)
+{
+	plan(5);
+	header();
+
+	mp_snprint_ext = mp_snprint_ext_test;
+	mp_fprint_ext = mp_fprint_ext_test;
+
+	char sample[64];
+	char buffer[64];
+	char str[64];
+	struct datetime date = {0, 0, 0}; // 1970-01-01T00:00Z
+
+	mp_encode_datetime(buffer, &date);
+	int sz = datetime_to_string(&date, str, sizeof(str));
+	int rc = mp_snprint(NULL, 0, buffer);
+	is(rc, sz, "correct mp_snprint size %u with empty buffer", rc);
+	rc = mp_snprint(str, sizeof(str), buffer);
+	is(rc, sz, "correct mp_snprint size %u", rc);
+	datetime_to_string(&date, sample, sizeof(sample));
+	is(strcmp(str, sample), 0, "correct mp_snprint result");
+
+	FILE *f = tmpfile();
+	rc = mp_fprint(f, buffer);
+	is(rc, sz, "correct mp_fprint size %u", sz);
+	rewind(f);
+	rc = fread(str, 1, sizeof(str), f);
+	str[rc] = 0;
+	is(strcmp(str, sample), 0, "correct mp_fprint result %u", rc);
+	fclose(f);
+
+	mp_snprint_ext = mp_snprint_ext_default;
+	mp_fprint_ext = mp_fprint_ext_default;
+
+	footer();
+	check_plan();
+}
+
 int
 main(void)
 {
-	plan(2);
+	plan(4);
 	datetime_test();
 	tostring_datetime_test();
+	mp_datetime_test();
+	mp_print_test();
 
 	return check_plan();
 }
