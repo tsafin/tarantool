@@ -30,13 +30,19 @@
  * SUCH DAMAGE.
  */
 
-#include <c-dt/dt_core.h>
+#include <c-dt/dt.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 #if defined(__cplusplus)
 extern "C" {
 #endif /* defined(__cplusplus) */
+
+#ifndef SECS_PER_DAY
+#define SECS_PER_DAY	86400
+#define NANOS_PER_SEC	1000000000
+#endif
 
 /**
  * datetime structure consisting of:
@@ -54,6 +60,35 @@ struct t_datetime_duration {
 	int secs;	///< relative seconds delta
 	int nsec;	///< nanoseconds delta
 };
+
+int
+datetime_compare(const struct t_datetime_tz * lhs,
+		 const struct t_datetime_tz * rhs);
+
+
+struct t_datetime_tz *
+datetime_unpack(const char **data, uint32_t len, struct t_datetime_tz *date);
+
+char *
+datetime_pack(char *data, const struct t_datetime_tz *date);
+
+uint32_t
+mp_sizeof_datetime(const struct t_datetime_tz *date);
+
+struct t_datetime_tz *
+mp_decode_datetime(const char **data, struct t_datetime_tz *date);
+
+char *
+mp_encode_datetime(char *data, const struct t_datetime_tz *date);
+
+int
+datetime_to_string(const struct t_datetime_tz * date, char *buf, uint32_t len);
+
+int
+mp_snprint_datetime(char *buf, int size, const char **data, uint32_t len);
+
+int
+mp_fprint_datetime(FILE *file, const char **data, uint32_t len);
 
 #if defined(__cplusplus)
 } /* extern "C" */
