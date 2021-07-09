@@ -6,7 +6,7 @@ local date = require('datetime')
 local ffi = require('ffi')
 
 
-test:plan(5)
+test:plan(6)
 
 test:test("Simple tests for parser", function(test)
     test:plan(2)
@@ -186,6 +186,21 @@ test:test("Parse iso date - invalid strings", function(test)
         test:ok(len == 0, ('%s: length check %d'):format(str, len))
         test:ok(date_part == nil, ('%s: empty date check %s'):format(str, date_part))
     end
+end)
+
+test:test("Parse tiny date into seconds and other parts", function(test)
+    test:plan(9)
+    local str = '19700101 00:00:30.528'
+    local tiny = date(str)
+    test:ok(tiny.secs == 30, ("secs of '%s'"):format(str))
+    test:ok(tiny.nsec == 528000000, ("nsec of '%s'"):format(str))
+    test:ok(tiny.nanoseconds == 30528000000, "nanoseconds")
+    test:ok(tiny.microseconds == 30528000, "microseconds")
+    test:ok(tiny.milliseconds == 30528, "milliseconds")
+    test:ok(tiny.seconds == 30.528, "seconds")
+    test:ok(tiny.timestamp == 30.528, "timestamp")
+    test:ok(tiny.minutes == 0.5088, "minutes")
+    test:ok(tiny.hours == 0.00848, "hours")
 end)
 
 os.exit(test:check() and 0 or 1)
