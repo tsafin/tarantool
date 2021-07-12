@@ -147,12 +147,14 @@ datetime_to_string(const struct datetime_t * date, char *buf, uint32_t len)
 
 	int year, month, day, sec, ns, offset, sign;
 	dt_to_ymd(dt, &year, &month, &day);
-	int secs = date->secs, hour = (secs / 3600) % 24,
+	offset = date->offset;
+
+	int secs = date->secs + offset * 60,
+	    hour = (secs / 3600) % 24,
 	    minute = (secs / 60) % 60;
 	;
 	sec = secs % 60;
 	ns = date->nsec;
-	offset = date->offset;
 	uint32_t sz;
 	sz = snprintf(buf, len, "%04d-%02d-%02dT%02d:%02d",
 		      year, month, day, hour, minute);
