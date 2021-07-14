@@ -4,7 +4,7 @@ local tap = require('tap')
 local test = tap.test("errno")
 local date = require('datetime')
 
-test:plan(6)
+test:plan(8)
 
 test:test("Simple tests for parser", function(test)
     test:plan(2)
@@ -192,15 +192,75 @@ test:test("Parse tiny date into seconds and other parts", function(test)
     test:plan(9)
     local str = '19700101 00:00:30.528'
     local tiny = date(str)
-    test:ok(tiny.secs, 30, ("secs of '%s'"):format(str))
-    test:ok(tiny.nsec, 528000000, ("nsec of '%s'"):format(str))
-    test:ok(tiny.nanoseconds, 30528000000, "nanoseconds")
-    test:ok(tiny.microseconds, 30528000, "microseconds")
-    test:ok(tiny.milliseconds, 30528, "milliseconds")
-    test:ok(tiny.seconds, 30.528, "seconds")
-    test:ok(tiny.timestamp, 30.528, "timestamp")
-    test:ok(tiny.minutes, 0.5088, "minuts")
-    test:ok(tiny.hours,  0.00848, "hours")
+    test:ok(tiny.secs == 30, ("secs of '%s'"):format(str))
+    test:ok(tiny.nsec == 528000000, ("nsec of '%s'"):format(str))
+    test:ok(tiny.nanoseconds == 30528000000, "nanoseconds")
+    test:ok(tiny.microseconds == 30528000, "microseconds")
+    test:ok(tiny.milliseconds == 30528, "milliseconds")
+    test:ok(tiny.seconds == 30.528, "seconds")
+    test:ok(tiny.timestamp == 30.528, "timestamp")
+    test:ok(tiny.minutes == 0.5088, "minuts")
+    test:ok(tiny.hours == 0.00848, "hours")
+end)
+
+test:test("Stringization of dates and periods", function(test)
+    test:plan(13)
+    local str = '19700101Z'
+    local dt = date(str)
+    test:ok(tostring(dt) == '1970-01-01T00:00Z', ('tostring(%s)'):format(str))
+    test:ok(tostring(date.seconds(12)) == '+12 secs', '+12 seconds')
+    test:ok(tostring(date.seconds(-12)) == '-12 secs', '-12 seconds')
+    test:ok(tostring(date.minutes(12)) == '+12 minutes, 0 seconds', '+12 minutes')
+    test:ok(tostring(date.minutes(-12)) == '-12 minutes, 0 seconds', '-12 minutes')
+    test:ok(tostring(date.hours(12)) == '+12 hours, 0 minutes, 0 seconds',
+            '+12 hours')
+    test:ok(tostring(date.hours(-12)) == '-12 hours, 0 minutes, 0 seconds',
+            '-12 hours')
+    test:ok(tostring(date.days(12)) == '+12 days, 0 hours, 0 minutes, 0 seconds',
+            '+12 days')
+    test:ok(tostring(date.days(-12)) == '-12 days, 0 hours, 0 minutes, 0 seconds',
+            '-12 days')
+    test:ok(tostring(date.months(5)) == '+5 months', '+5 months')
+    test:ok(tostring(date.months(-5)) == '-5 months', '-5 months')
+    test:ok(tostring(date.years(4)) == '+4 years', '+4 years')
+    test:ok(tostring(date.years(-4)) == '-4 years', '-4 years')
+end)
+
+test:test("Time duration operations", function(test)
+    test:plan(12)
+
+    -- check arithmetic with leap dates
+    local T = date('1972-02-29')
+    local M = date.months(2)
+    local Y = date.years(1)
+    test:ok(tostring(T + M) == '1972-04-29T00:00Z', ('T(%s) + M(%s'):format(T, M))
+    test:ok(tostring(T + Y) == '1973-03-01T00:00Z', ('T(%s) + Y(%s'):format(T, Y))
+    test:ok(tostring(T + M + Y) == '1973-04-30T00:00Z',
+            ('T(%s) + M(%s) + Y(%s'):format(T, M, Y))
+    test:ok(tostring(T + Y + M) == '1973-05-01T00:00Z',
+            ('T(%s) + M(%s) + Y(%s'):format(T, M, Y))
+    test:ok(tostring(T:add{years = 1, months = 2}) == '1973-04-30T00:00Z',
+            ('T:add{years=1,months=2}(%s)'):format(T))
+
+    -- check average, not leap dates
+    T = date('1970-01-08')
+    test:ok(tostring(T + M) == '1970-03-08T00:00Z', ('T(%s) + M(%s'):format(T, M))
+    test:ok(tostring(T + Y) == '1971-01-08T00:00Z', ('T(%s) + Y(%s'):format(T, Y))
+    test:ok(tostring(T + M + Y) == '1971-03-08T00:00Z',
+            ('T(%s) + M(%s) + Y(%s'):format(T, M, Y))
+    test:ok(tostring(T + Y + M) == '1971-03-08T00:00Z',
+            ('T(%s) + Y(%s) + M(%s'):format(T, Y, M))
+    test:ok(tostring(T:add{years = 1, months = 2}) == '1971-03-08T00:00Z',
+            ('T:add{years=1,months=2}(%s)'):format(T))
+
+
+    -- subtraction of 2 dates
+    local T2 = date('19700103')
+    local T1 = date('1970-01-01')
+    test:ok(tostring(T2 - T1) == '+2 days, 0 hours, 0 minutes, 0 seconds',
+            ('T2(%s) - T1(%s'):format(T2, T1))
+    test:ok(tostring(T1 - T2) == '-2 days, 0 hours, 0 minutes, 0 seconds',
+            ('T2(%s) - T1(%s'):format(T2, T1))
 end)
 
 os.exit(test:check() and 0 or 1)
