@@ -37,6 +37,17 @@ ffi.cdef [[
     int      dt_rdn          (dt_t dt);
     dt_dow_t dt_dow          (dt_t dt);
 
+    // dt_arithmetic.h
+    typedef enum {
+        DT_EXCESS,
+        DT_LIMIT,
+        DT_SNAP
+    } dt_adjust_t;
+
+    dt_t    dt_add_years        (dt_t dt, int delta, dt_adjust_t adjust);
+    dt_t    dt_add_quarters     (dt_t dt, int delta, dt_adjust_t adjust);
+    dt_t    dt_add_months       (dt_t dt, int delta, dt_adjust_t adjust);
+
     // dt_parse_iso.h
     size_t dt_parse_iso_date          (const char *str, size_t len, dt_t *dt);
 
@@ -158,58 +169,146 @@ local DT_EPOCH_1970_OFFSET = 719163LL
 
 local datetime_t = ffi.typeof('struct datetime_t')
 local interval_t = ffi.typeof('struct datetime_interval_t')
+ffi.cdef [[
+    struct t_interval_months {
+        int m;
+    };
+
+    struct t_interval_years {
+        int y;
+    };
+]]
+local interval_months_t = ffi.typeof('struct t_interval_months')
+local interval_years_t = ffi.typeof('struct t_interval_years')
+
+local function is_interval(o)
+    return ffi.istype(interval_t, o) or
+           ffi.istype(interval_months_t, o) or
+           ffi.istype(interval_years_t, o)
+end
+
+local function is_datetime(o)
+    return ffi.istype(o, datetime_t)
+end
+
 
 local function interval_new()
     local interval = ffi.new(interval_t)
     return interval
 end
 
-local function adjusted_secs(dt)
-    return dt.secs - dt.offset * 60
+local function check_number(n, message, lvl)
+    if lvl == nil then
+        lvl = 2
+    end
+    if type(n) ~= 'number' then
+        return error(('Usage: %s'):format(message), lvl)
+    end
 end
 
-local function datetime_sub(lhs, rhs)
-    local s1 = adjusted_secs(lhs)
-    local s2 = adjusted_secs(rhs)
-    local d = interval_new()
-    d.secs = s2 - s1
-    d.nsec = rhs.nsec - lhs.nsec
-    if d.nsec < 0 then
-        d.secs = d.secs - 1
-        d.nsec = d.nsec + NANOS_PER_SEC
+local function check_date(o, message, lvl)
+    if lvl == nil then
+        lvl = 2
     end
-    return d
+    if not is_datetime(o) then
+        return error(('Usage: %s'):format(message), lvl)
+    end
 end
 
-local function datetime_add(lhs, rhs)
-    local s1 = adjusted_secs(lhs)
-    local s2 = adjusted_secs(rhs)
-    local d = interval_new()
-    d.secs = s2 + s1
-    d.nsec = rhs.nsec + lhs.nsec
-    if d.nsec >= NANOS_PER_SEC then
-        d.secs = d.secs + 1
-        d.nsec = d.nsec - NANOS_PER_SEC
+local function check_date_interval(o, message, lvl)
+    if lvl == nil then
+        lvl = 2
     end
-    return d
+    if not (is_datetime(o) or is_interval(o)) then
+        return error(('Usage: %s'):format(message), lvl)
+    end
+end
+
+local function check_interval(o, message, lvl)
+    if lvl == nil then
+        lvl = 2
+    end
+    if not is_interval(o) then
+        return error(('Usage: %s'):format(message), lvl)
+    end
+end
+
+local function check_str(o, message, lvl)
+    if lvl == nil then
+        lvl = 2
+    end
+    if not type(o) == 'string' then
+        return error(('Usage: %s'):format(message), lvl)
+    end
+end
+
+local function interval_years_new(y)
+    check_number(y, "years(number)")
+    local o = ffi.new(interval_years_t)
+    o.y = y
+    return o
+end
+
+local function interval_months_new(m)
+    check_number(m, "months(number)")
+    local o = ffi.new(interval_months_t)
+    o.m = m
+    return o
+end
+
+local function interval_weeks_new(w)
+    check_number(w, "weeks(number)")
+    local o = ffi.new(interval_t)
+    o.secs = w * SECS_PER_DAY * 7
+    return o
+end
+
+local function interval_days_new(d)
+    check_number(d, "days(number)")
+    local o = ffi.new(interval_t)
+    o.secs = d * SECS_PER_DAY
+    return o
+end
+
+local function interval_hours_new(h)
+    check_number(h, "hours(number)")
+    local o = ffi.new(interval_t)
+    o.secs = h * 60 * 60
+    return o
+end
+
+local function interval_minutes_new(m)
+    check_number(m, "minutes(number)")
+    local o = ffi.new(interval_t)
+    o.secs = m * 60
+    return o
+end
+
+local function interval_seconds_new(s)
+    check_number(s, "seconds(number)")
+    local o = ffi.new(interval_t)
+    o.nsec = s % 1 * 1e9
+    o.secs = s - (s % 1)
+    return o
 end
 
 local function datetime_eq(lhs, rhs)
-    -- we usually don't need to check nullness
-    -- but older tarantool console will call us checking for equality to nil
-    if rhs == nil then
-        return false
-    end
+    check_date_interval(lhs, "datetime:__eq(date or interval)")
+    check_date_interval(rhs, "datetime:__eq(date or interval)")
     return (lhs.secs == rhs.secs) and (lhs.nsec == rhs.nsec)
 end
 
 
 local function datetime_lt(lhs, rhs)
+    check_date_interval(lhs, "datetime:__lt(date or interval)")
+    check_date_interval(rhs, "datetime:__lt(date or interval)")
     return (lhs.secs < rhs.secs) or
            (lhs.secs == rhs.secs and lhs.nsec < rhs.nsec)
 end
 
 local function datetime_le(lhs, rhs)
+    check_date_interval(lhs, "datetime:__le(date or interval)")
+    check_date_interval(rhs, "datetime:__le(date or interval)")
     return (lhs.secs <= rhs.secs) or
            (lhs.secs == rhs.secs and lhs.nsec <= rhs.nsec)
 end
@@ -224,19 +323,123 @@ local function interval_serialize(self)
     return { secs = self.secs, nsec = self.nsec }
 end
 
+local function local_rd(o)
+    return math.floor(tonumber(o.secs / SECS_PER_DAY)) + DT_EPOCH_1970_OFFSET
+end
+
+local function local_dt(o)
+    return cdt.dt_from_rdn(local_rd(o))
+end
+
+local function _normalize_nsec(secs, nsec)
+    if nsec < 0 then
+        secs = secs - 1
+        nsec = nsec + NANOS_PER_SEC
+    elseif nsec >= NANOS_PER_SEC then
+        secs = secs + 1
+        nsec = nsec - NANOS_PER_SEC
+    end
+    return secs, nsec
+end
+
+-- addition or subtraction from date/time of a given interval
+-- described via table direction should be +1 or -1
+local function interval_increment(self, o, direction)
+    assert(direction == -1 or direction == 1)
+    check_date(self, "interval_increment(date, object, -+1)")
+    assert(type(o) == 'table')
+
+    local ym_updated = false
+    local dhms_updated = false
+
+    local dt = local_dt(self)
+    local secs, nsec
+    secs, nsec = self.secs, self.nsec
+
+    for key, value in pairs(o) do
+        local handlers = {
+            years = function(v)
+                assert(v > 0 and v < 10000)
+                dt = cdt.dt_add_years(dt, direction * v, cdt.DT_LIMIT)
+                ym_updated = true
+            end,
+
+            months = function(v)
+                assert(v > 0 and v < 13 )
+                dt = cdt.dt_add_months(dt, direction * v, cdt.DT_LIMIT)
+                ym_updated = true
+            end,
+
+            weeks = function(v)
+                assert(v > 0 and v < 32)
+                secs = secs + direction * 7 * v * SECS_PER_DAY
+                dhms_updated = true
+            end,
+
+            days = function(v)
+                assert(v > 0 and v < 32)
+                secs = secs + direction * v * SECS_PER_DAY
+                dhms_updated = true
+            end,
+
+            hours = function(v)
+                assert(v >= 0 and v < 24)
+                secs = secs + direction * 60 * 60 * v
+                dhms_updated = true
+            end,
+
+            minutes = function(v)
+                assert(v >= 0 and v < 60)
+                secs = secs + direction * 60 * v
+            end,
+
+            seconds = function(v)
+                assert(v >= 0 and v < 61)
+                local s, frac
+                frac = v % 1
+                if frac > 0 then
+                    s = v - (v % 1)
+                else
+                    s = v
+                end
+                secs = secs + direction * s
+                nsec = nsec + direction * frac * 1e9 -- convert fraction to nanoseconds
+                dhms_updated = true
+            end,
+        }
+        handlers[key](value)
+    end
+
+    secs, nsec = _normalize_nsec(secs, nsec)
+
+    -- .days, .hours, .minutes, .seconds
+    if dhms_updated then
+        self.secs = secs
+        self.nsec = nsec
+    end
+
+    -- .years, .months updated
+    if ym_updated then
+        self.secs = (cdt.dt_rdn(dt) - DT_EPOCH_1970_OFFSET) * SECS_PER_DAY +
+                    secs % SECS_PER_DAY
+    end
+
+    return self
+end
+
 local datetime_index = function(self, key)
     local attributes = {
         timestamp = function(self)
             return tonumber(self.secs) + self.nsec / 1e9
         end,
         nanoseconds = function(self)
-            return tonumber(self.secs * 1e9 + self.nsec)
+            return self.secs * 1e9 + self.nsec
         end,
         microseconds = function(self)
-            return tonumber(self.secs * 1e6 + self.nsec / 1e3)
+            return self.secs * 1e6 + self.nsec / 1e3
         end,
         milliseconds = function(self)
-            return tonumber(self.secs * 1e3 + self.nsec / 1e6)
+            return self.secs * 1e3 + self.nsec / 1e6
         end,
         seconds = function(self)
             return tonumber(self.secs) + self.nsec / 1e9
@@ -250,31 +453,19 @@ local datetime_index = function(self, key)
         days = function(self)
             return (tonumber(self.secs) + self.nsec / 1e9) / (60 * 60) / 24
         end,
+        add = function(self)
+            return function(self, o)
+                return interval_increment(self, o, 1)
+            end
+        end,
+        sub = function(self)
+            return function(self, o)
+                return interval_increment(self, o, -1)
+            end
+        end,
     }
     return attributes[key] ~= nil and attributes[key](self) or nil
 end
-
-local datetime_mt = {
-    -- __tostring = datetime_tostring,
-    __serialize = datetime_serialize,
-    __eq = datetime_eq,
-    __lt = datetime_lt,
-    __le = datetime_le,
-    __sub = datetime_sub,
-    __add = datetime_add,
-    __index = datetime_index,
-}
-
-local interval_mt = {
-    -- __tostring = interval_tostring,
-    __serialize = interval_serialize,
-    __eq = datetime_eq,
-    __lt = datetime_lt,
-    __le = datetime_le,
-    __sub = datetime_sub,
-    __add = datetime_add,
-    __index = datetime_index,
-}
 
 local function datetime_new_raw(secs, nsec, offset)
     local dt_obj = ffi.new(datetime_t)
@@ -282,14 +473,6 @@ local function datetime_new_raw(secs, nsec, offset)
     dt_obj.nsec = nsec
     dt_obj.offset = offset
     return dt_obj
-end
-
-local function local_rd(o)
-    return math.floor(tonumber(o.secs / SECS_PER_DAY)) + DT_EPOCH_1970_OFFSET
-end
-
-local function local_dt(o)
-    return cdt.dt_from_rdn(local_rd(o))
 end
 
 local function mk_timestamp(dt, sp, fp, offset)
@@ -367,11 +550,12 @@ local function datetime_new(o)
             second = function(v)
                 assert(v >= 0 and v < 61)
                 frac = v % 1
-                if frac then
+                if frac > 0 then
                     s = v - (v % 1)
                 else
                     s = v
                 end
+                frac = frac * 1e9 -- convert fraction to nanoseconds
                 hms = true
             end,
 
@@ -402,6 +586,153 @@ local function datetime_new(o)
     return mk_timestamp(dt, secs, frac, offset)
 end
 
+local function datetime_tostring(o)
+    if ffi.typeof(o) == datetime_t then
+        local sz = 48
+        local buff = ffi.new('char[?]', sz)
+        local len = native.datetime_to_string(o, buff, sz)
+        assert(len < sz)
+        return ffi.string(buff)
+    elseif ffi.typeof(o) == interval_years_t then
+        return ('%+d years'):format(o.y)
+    elseif ffi.typeof(o) == interval_months_t then
+        return ('%+d months'):format(o.m)
+    elseif ffi.typeof(o) == interval_t then
+        local ts = o.timestamp
+        local sign = '+'
+
+        if ts < 0 then
+            ts = -ts
+            sign = '-'
+        end
+
+        if ts < 60 then
+            return ('%s%s secs'):format(sign, ts)
+        elseif ts < 60 * 60 then
+            return ('%+d minutes, %s seconds'):format(o.minutes, ts % 60)
+        elseif ts < 24 * 60 * 60 then
+            return ('%+d hours, %d minutes, %s seconds'):format(
+                    o.hours, o.minutes % 60, ts % 60)
+        else
+            return ('%+d days, %d hours, %d minutes, %s seconds'):format(
+                    o.days, o.hours % 24, o.minutes % 60, ts % 60)
+        end
+    end
+end
+
+local function date_first(lhs, rhs)
+    if is_datetime(lhs) then
+        return lhs, rhs
+    else
+        return rhs, lhs
+    end
+end
+
+--[[
+Matrix of subtraction operands eligibility and their result type
+
+|                 |  datetime | interval | interval_months | interval_years |
++-----------------+-----------+----------+-----------------+----------------+
+| datetime        |  interval | datetime | datetime        | datetime       |
+| interval        |           | interval |                 |                |
+| interval_months |           |          | interval_months |                |
+| interval_years  |           |          |                 | interval_years |
+]]
+local function datetime_sub(lhs, rhs)
+    check_date_interval(lhs, "datetime:__sub(date or interval)")
+    local d, s = lhs, rhs
+    local left_t = ffi.typeof(d)
+    local right_t = ffi.typeof(s)
+    local o
+
+    if left_t == datetime_t then
+        -- 1. left is date, right is date or generic interval
+        if (right_t == datetime_t or right_t == interval_t) then
+            o = right_t == datetime_t and interval_new() or datetime_new()
+            o.secs, o.nsec = _normalize_nsec(lhs.secs - rhs.secs,
+                                            lhs.nsec - rhs.nsec)
+            return o
+        -- 2. left is date, right is interval in months
+        elseif right_t == interval_months_t then
+            local dt = cdt.dt_add_months(local_dt(lhs), -rhs.m, cdt.DT_LIMIT)
+            return mk_timestamp(dt, lhs.secs % SECS_PER_DAY,
+                                lhs.nsec, lhs.offset)
+
+        -- 3. left is date, right is interval in years
+        elseif right_t == interval_years_t then
+            local dt = cdt.dt_add_years(local_dt(lhs), -rhs.y, cdt.DT_LIMIT)
+            return mk_timestamp(dt, lhs.secs % SECS_PER_DAY,
+                                lhs.nsec, lhs.offset)
+        else
+            error("datetime:__sub(date or interval) - incompatible type of arguments", 2)
+        end
+    -- 4. both left and right are generic intervals
+    elseif left_t == interval_t and right_t == interval_t then
+        o = interval_new()
+        o.secs, o.nsec = _normalize_nsec(lhs.secs - rhs.secs,
+                                        lhs.nsec - rhs.nsec)
+        return o
+    -- 5. both left and right are intervals in months
+    elseif left_t == interval_months_t and right_t == interval_months_t then
+        return interval_months_new(lhs.m - rhs.m)
+    -- 5. both left and right are intervals in years
+    elseif left_t == interval_years_t and right_t == interval_years_t then
+        return interval_years_new(lhs.y - rhs.y)
+    else
+        error("datetime:__sub(date or interval) - incompatible type of arguments", 2)
+    end
+end
+
+--[[
+Matrix of addition operands eligibility and their result type
+
+|                 |  datetime | interval | interval_months | interval_years |
++-----------------+-----------+----------+-----------------+----------------+
+| datetime        |  datetime | datetime | datetime        | datetime       |
+| interval        |  datetime | interval |                 |                |
+| interval_months |  datetime |          | interval_months |                |
+| interval_years  |  datetime |          |                 | interval_years |
+]]
+local function datetime_add(lhs, rhs)
+    local d, s = date_first(lhs, rhs)
+
+    check_date_interval(d, "datetime:__add(interval)")
+    check_interval(s, "datetime:__add(interval)")
+    local left_t = ffi.typeof(d)
+    local right_t = ffi.typeof(s)
+    local o
+
+    -- 1. left is date, right is date or interval
+    if left_t == datetime_t and right_t == interval_t then
+        o = datetime_new()
+        o.secs, o.nsec = _normalize_nsec(d.secs + s.secs, d.nsec + s.nsec)
+        return o
+    -- 2. left is date, right is interval in months
+    elseif left_t == datetime_t and right_t == interval_months_t then
+        local dt = cdt.dt_add_months(local_dt(d), s.m, cdt.DT_LIMIT)
+        local secs = d.secs % SECS_PER_DAY
+        return mk_timestamp(dt, secs, d.nsec, d.offset or 0)
+
+    -- 3. left is date, right is interval in years
+    elseif left_t == datetime_t and right_t == interval_years_t then
+        local dt = cdt.dt_add_years(local_dt(d), s.y, cdt.DT_LIMIT)
+        local secs = d.secs % SECS_PER_DAY
+        return mk_timestamp(dt, secs, d.nsec, d.offset or 0)
+    -- 4. both left and right are generic intervals
+    elseif left_t == interval_t and right_t == interval_t then
+        o = interval_new()
+        o.secs, o.nsec = _normalize_nsec(d.secs + s.secs, d.nsec + s.nsec)
+        return o
+    -- 5. both left and right are intervals in months
+    elseif left_t == interval_months_t and right_t == interval_months_t then
+        return interval_months_new(d.m + s.m)
+    -- 6. both left and right are intervals in years
+    elseif left_t == interval_years_t and right_t == interval_years_t then
+        return interval_years_new(d.y + s.y)
+    else
+        error("datetime:__add(date or interval) - incompatible type of arguments", 2)
+    end
+end
 
 -- simple parse functions:
 -- parse_date/parse_time/parse_zone
@@ -415,6 +746,7 @@ end
 ]]
 
 local function parse_date(str)
+    check_str("datetime.parse_date(string)")
     local dt = ffi.new('dt_t[1]')
     local len = cdt.dt_parse_iso_date(str, #str, dt)
     return len > 0 and mk_timestamp(dt[0]) or nil, tonumber(len)
@@ -431,6 +763,7 @@ end
     The time designator [T] may be omitted.
 ]]
 local function parse_time(str)
+    check_str("datetime.parse_time(string)")
     local sp = ffi.new('int[1]')
     local fp = ffi.new('int[1]')
     local len = cdt.dt_parse_iso_time(str, #str, sp, fp)
@@ -444,6 +777,7 @@ end
     ±hhmm    ±hh:mm
 ]]
 local function parse_zone(str)
+    check_str("datetime.parse_zone(string)")
     local offset = ffi.new('int[1]')
     local len = cdt.dt_parse_iso_zone_lenient(str, #str, offset)
     return len > 0 and mk_timestamp(nil, nil, nil, offset[0]) or nil, tonumber(len)
@@ -457,7 +791,8 @@ end
 
     date [T] time [ ] time_zone
 ]]
-local function parse_str(str)
+local function parse(str)
+    check_str("datetime.parse(string)")
     local dt = ffi.new('dt_t[1]')
     local len = #str
     local n = cdt.dt_parse_iso_date(str, len, dt)
@@ -508,7 +843,7 @@ local function datetime_from(o)
     if o == nil or type(o) == 'table' then
         return datetime_new(o)
     elseif type(o) == 'string' then
-        return parse_str(o)
+        return parse(o)
     end
 end
 
@@ -531,8 +866,8 @@ local function local_now()
 end
 
 local function datetime_to_tm_ptr(o)
+    assert(is_datetime(o))
     local p_tm = ffi.new 'struct tm[1]'
-    assert(ffi.typeof(o) == datetime_t)
     -- dt_to_struct_tm() fills only date data
     cdt.dt_to_struct_tm(local_dt(o), p_tm)
 
@@ -551,20 +886,21 @@ local function datetime_to_tm_ptr(o)
 end
 
 local function asctime(o)
-    assert(ffi.typeof(o) == datetime_t)
+    check_date(o, "datetime:asctime()")
+
     local p_tm = datetime_to_tm_ptr(o)
     return ffi.string(native.asctime(p_tm))
 end
 
 local function ctime(o)
-    assert(ffi.typeof(o) == datetime_t)
+    check_date(o, "datetime:ctime()")
     local p_time = ffi.new 'time_t[1]'
     p_time[0] = o.secs
     return ffi.string(native.ctime(p_time))
 end
 
 local function strftime(fmt, o)
-    assert(ffi.typeof(o) == datetime_t)
+    check_date(o, "datetime.strftime(fmt, date)")
     local sz = 50
     local buff = ffi.new('char[?]', sz)
     local p_tm = datetime_to_tm_ptr(o)
@@ -572,36 +908,76 @@ local function strftime(fmt, o)
     return ffi.string(buff)
 end
 
-local function datetime_tostring(o)
-    assert(ffi.typeof(o) == datetime_t)
-    local sz = 48
-    local buff = ffi.new('char[?]', sz)
-    local len = native.datetime_to_string(o, buff, sz)
-    assert(len < sz)
-    return ffi.string(buff)
-end
 
+local datetime_mt = {
+    __tostring = datetime_tostring,
+    __serialize = datetime_serialize,
+    __eq = datetime_eq,
+    __lt = datetime_lt,
+    __le = datetime_le,
+    __sub = datetime_sub,
+    __add = datetime_add,
+    __index = datetime_index,
+    add = function(self, o)
+        self = interval_increment(self, o, 1)
+        return self
+    end,
+    sub = function(self, o)
+        self = interval_increment(self, o, -1)
+        return self
+    end
+}
+
+local interval_mt = {
+    __tostring = datetime_tostring,
+    __serialize = interval_serialize,
+    __eq = datetime_eq,
+    __lt = datetime_lt,
+    __le = datetime_le,
+    __sub = datetime_sub,
+    __add = datetime_add,
+    __index = datetime_index,
+}
+
+local interval_tiny_mt = {
+    __tostring = datetime_tostring,
+    __serialize = interval_serialize,
+    __sub = datetime_sub,
+    __add = datetime_add,
+    __index = datetime_index,
+}
 
 ffi.metatype(interval_t, interval_mt)
 ffi.metatype(datetime_t, datetime_mt)
+ffi.metatype(interval_years_t, interval_tiny_mt)
+ffi.metatype(interval_months_t, interval_tiny_mt)
 
 return setmetatable(
     {
-        datetime = datetime_new,
-        interval = interval_new,
+        new         = datetime_new,
+        years       = interval_years_new,
+        months      = interval_months_new,
+        weeks       = interval_weeks_new,
+        days        = interval_days_new,
+        hours       = interval_hours_new,
+        minutes     = interval_minutes_new,
+        seconds     = interval_seconds_new,
+        interval    = interval_new,
 
-        parse = parse_str,
-        parse_date = parse_date,
-        parse_time = parse_time,
-        parse_zone = parse_zone,
+        parse       = parse,
+        parse_date  = parse_date,
+        parse_time  = parse_time,
+        parse_zone  = parse_zone,
 
-        tostring = datetime_tostring,
+        tostring    = datetime_tostring,
 
-        now = local_now,
-    -- strptime = strptime;
-        strftime = strftime,
-        asctime = asctime,
-        ctime = ctime,
+        now         = local_now,
+        strftime    = strftime,
+        asctime     = asctime,
+        ctime       = ctime,
+
+        is_datetime = is_datetime,
+        is_interval = is_interval,
     }, {
         __call = function(self, ...) return datetime_from(...) end
     }
