@@ -157,6 +157,9 @@ datetime_to_string
 datetime_unpack
 decimal_from_string
 decimal_unpack
+tnt_dt_add_years
+tnt_dt_add_quarters
+tnt_dt_add_months
 tnt_dt_dow
 tnt_dt_from_rdn
 tnt_dt_from_struct_tm

@@ -6,7 +6,7 @@ local date = require('datetime')
 local ffi = require('ffi')
 
 
-test:plan(7)
+test:plan(10)
 
 test:test("Simple tests for parser", function(test)
     test:plan(2)
@@ -207,11 +207,164 @@ test:test("Parse tiny date into seconds and other parts", function(test)
     test:ok(tiny.hours == 0.00848, "hours")
 end)
 
-test:test("Stringization of date", function(test)
-    test:plan(1)
+test:test("Stringization of dates and intervals", function(test)
+    test:plan(13)
     local str = '19700101Z'
     local dt = date(str)
     test:ok(tostring(dt) == '1970-01-01T00:00Z', ('tostring(%s)'):format(str))
+    test:ok(tostring(date.seconds(12)) == '+12 secs', '+12 seconds')
+    test:ok(tostring(date.seconds(-12)) == '-12 secs', '-12 seconds')
+    test:ok(tostring(date.minutes(12)) == '+12 minutes, 0 seconds', '+12 minutes')
+    test:ok(tostring(date.minutes(-12)) == '-12 minutes, 0 seconds', '-12 minutes')
+    test:ok(tostring(date.hours(12)) == '+12 hours, 0 minutes, 0 seconds',
+            '+12 hours')
+    test:ok(tostring(date.hours(-12)) == '-12 hours, 0 minutes, 0 seconds',
+            '-12 hours')
+    test:ok(tostring(date.days(12)) == '+12 days, 0 hours, 0 minutes, 0 seconds',
+            '+12 days')
+    test:ok(tostring(date.days(-12)) == '-12 days, 0 hours, 0 minutes, 0 seconds',
+            '-12 days')
+    test:ok(tostring(date.months(5)) == '+5 months', '+5 months')
+    test:ok(tostring(date.months(-5)) == '-5 months', '-5 months')
+    test:ok(tostring(date.years(4)) == '+4 years', '+4 years')
+    test:ok(tostring(date.years(-4)) == '-4 years', '-4 years')
+end)
+
+test:test("Time interval operations", function(test)
+    test:plan(12)
+
+    -- check arithmetic with leap dates
+    local T = date('1972-02-29')
+    local M = date.months(2)
+    local Y = date.years(1)
+    test:ok(tostring(T + M) == '1972-04-29T00:00Z', ('T(%s) + M(%s'):format(T, M))
+    test:ok(tostring(T + Y) == '1973-03-01T00:00Z', ('T(%s) + Y(%s'):format(T, Y))
+    test:ok(tostring(T + M + Y) == '1973-04-30T00:00Z',
+            ('T(%s) + M(%s) + Y(%s'):format(T, M, Y))
+    test:ok(tostring(T + Y + M) == '1973-05-01T00:00Z',
+            ('T(%s) + M(%s) + Y(%s'):format(T, M, Y))
+    test:ok(tostring(T:add{years = 1, months = 2}) == '1973-04-30T00:00Z',
+            ('T:add{years=1,months=2}(%s)'):format(T))
+
+    -- check average, not leap dates
+    T = date('1970-01-08')
+    test:ok(tostring(T + M) == '1970-03-08T00:00Z', ('T(%s) + M(%s'):format(T, M))
+    test:ok(tostring(T + Y) == '1971-01-08T00:00Z', ('T(%s) + Y(%s'):format(T, Y))
+    test:ok(tostring(T + M + Y) == '1971-03-08T00:00Z',
+            ('T(%s) + M(%s) + Y(%s'):format(T, M, Y))
+    test:ok(tostring(T + Y + M) == '1971-03-08T00:00Z',
+            ('T(%s) + Y(%s) + M(%s'):format(T, Y, M))
+    test:ok(tostring(T:add{years = 1, months = 2}) == '1971-03-08T00:00Z',
+            ('T:add{years=1,months=2}(%s)'):format(T))
+
+
+    -- subtraction of 2 dates
+    local T2 = date('19700103')
+    local T1 = date('1970-01-01')
+    test:ok(tostring(T2 - T1) == '+2 days, 0 hours, 0 minutes, 0 seconds',
+            ('T2(%s) - T1(%s'):format(T2, T1))
+    test:ok(tostring(T1 - T2) == '-2 days, 0 hours, 0 minutes, 0 seconds',
+            ('T2(%s) - T1(%s'):format(T2, T1))
+end)
+
+local function catchadd(A, B)
+    return pcall(function() return A + B end)
+end
+
+--[[
+Matrix of addition operands eligibility and their result type
+
+|                 |  datetime | interval | interval_months | interval_years |
++-----------------+-----------+----------+-----------------+----------------+
+| datetime        |  datetime | datetime | datetime        | datetime       |
+| interval        |  datetime | interval |                 |                |
+| interval_months |  datetime |          | interval_months |                |
+| interval_years  |  datetime |          |                 | interval_years |
+]]
+
+test:test("Matrix of allowed time and interval additions", function(test)
+    test:plan(20)
+
+    -- check arithmetic with leap dates
+    local T1970 = date('1970-01-01')
+    local T2000 = date('2000-01-01')
+    local I1 = date.days(1)
+    local M2 = date.months(2)
+    local M10 = date.months(10)
+    local Y1 = date.years(1)
+    local Y5 = date.years(5)
+
+    test:ok(catchadd(T1970, I1) == true, "status: T + I")
+    test:ok(catchadd(T1970, M2) == true, "status: T + M")
+    test:ok(catchadd(T1970, Y1) == true, "status: T + Y")
+    test:ok(catchadd(T1970, T2000) == false, "status: T + T")
+    test:ok(catchadd(I1, T1970) == true, "status: I + T")
+    test:ok(catchadd(M2, T1970) == true, "status: M + T")
+    test:ok(catchadd(Y1, T1970) == true, "status: Y + T")
+    test:ok(catchadd(I1, Y1) == false, "status: I + Y")
+    test:ok(catchadd(M2, Y1) == false, "status: M + Y")
+    test:ok(catchadd(I1, Y1) == false, "status: I + Y")
+    test:ok(catchadd(Y5, M10) == false, "status: Y + M")
+    test:ok(catchadd(Y5, I1) == false, "status: Y + I")
+    test:ok(catchadd(Y5, Y1) == true, "status: Y + Y")
+
+    test:ok(tostring(T1970 + I1) == "1970-01-02T00:00Z", "value: T + I")
+    test:ok(tostring(T1970 + M2) == "1970-03-01T00:00Z", "value: T + M")
+    test:ok(tostring(T1970 + Y1) == "1971-01-01T00:00Z", "value: T + Y")
+    test:ok(tostring(I1 + T1970) == "1970-01-02T00:00Z", "value: I + T")
+    test:ok(tostring(M2 + T1970) == "1970-03-01T00:00Z", "value: M + T")
+    test:ok(tostring(Y1 + T1970) == "1971-01-01T00:00Z", "value: Y + T")
+    test:ok(tostring(Y5 + Y1) == "+6 years", "Y + Y")
+
+end)
+
+local function catchsub_status(A, B)
+    return pcall(function() return A - B end)
+end
+
+--[[
+Matrix of subtraction operands eligibility and their result type
+
+|                 |  datetime | interval | interval_months | interval_years |
++-----------------+-----------+----------+-----------------+----------------+
+| datetime        |  interval | datetime | datetime        | datetime       |
+| interval        |           | interval |                 |                |
+| interval_months |           |          | interval_months |                |
+| interval_years  |           |          |                 | interval_years |
+]]
+test:test("Matrix of allowed time and interval subtractions", function(test)
+    test:plan(18)
+
+    -- check arithmetic with leap dates
+    local T1970 = date('1970-01-01')
+    local T2000 = date('2000-01-01')
+    local I1 = date.days(1)
+    local M2 = date.months(2)
+    local M10 = date.months(10)
+    local Y1 = date.years(1)
+    local Y5 = date.years(5)
+
+    test:ok(catchsub_status(T1970, I1) == true, "status: T - I")
+    test:ok(catchsub_status(T1970, M2) == true, "status: T - M")
+    test:ok(catchsub_status(T1970, Y1) == true, "status: T - Y")
+    test:ok(catchsub_status(T1970, T2000) == true, "status: T - T")
+    test:ok(catchsub_status(I1, T1970) == false, "status: I + T")
+    test:ok(catchsub_status(M2, T1970) == false, "status: M + T")
+    test:ok(catchsub_status(Y1, T1970) == false, "status: Y + T")
+    test:ok(catchsub_status(I1, Y1) == false, "status: I - Y")
+    test:ok(catchsub_status(M2, Y1) == false, "status: M - Y")
+    test:ok(catchsub_status(I1, Y1) == false, "status: I - Y")
+    test:ok(catchsub_status(Y5, M10) == false, "status: Y - M")
+    test:ok(catchsub_status(Y5, I1) == false, "status: Y - I")
+    test:ok(catchsub_status(Y5, Y1) == true, "status: Y - Y")
+
+    test:ok(tostring(T1970 - I1) == "1969-12-31T00:00Z", "value: T - I")
+    test:ok(tostring(T1970 - M2) == "1969-11-01T00:00Z", "value: T - M")
+    test:ok(tostring(T1970 - Y1) == "1969-01-01T00:00Z", "value: T - Y")
+    test:ok(tostring(T1970 - T2000) == "-10957 days, 0 hours, 0 minutes, 0 seconds",
+            "value: T - T")
+    test:ok(tostring(Y5 - Y1) == "+4 years", "value: Y - Y")
+
 end)
 
 os.exit(test:check() and 0 or 1)
