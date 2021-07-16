@@ -768,7 +768,7 @@ static int
 dump_node(struct lua_dumper *d, struct node *nd, int indent)
 {
 	struct luaL_field *field = &nd->field;
-	char buf[FPCONV_G_FMT_BUFSIZE];
+	char buf[FPCONV_G_FMT_BUFSIZE + 8];
 	int ltype = lua_type(d->L, -1);
 	const char *str = NULL;
 	size_t len = 0;
@@ -860,6 +860,11 @@ dump_node(struct lua_dumper *d, struct node *nd, int indent)
 			nd->mask |= NODE_QUOTE;
 			str = tt_uuid_str(field->uuidval);
 			len = UUID_STR_LEN;
+			break;
+		case MP_DATETIME:
+			nd->mask |= NODE_QUOTE;
+			str = buf;
+			len = datetime_to_string(field->dateval, buf, sizeof buf);
 			break;
 		default:
 			d->err = EINVAL;
