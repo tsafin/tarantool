@@ -194,3 +194,21 @@ field_type_by_name(const char *name, size_t len)
 		return FIELD_TYPE_ANY;
 	return field_type_MAX;
 }
+
+const bool field_type_index_allowed[] =
+    {
+	/* [FIELD_TYPE_ANY]      = */ false,
+	/* [FIELD_TYPE_UNSIGNED] = */ true,
+	/* [FIELD_TYPE_STRING]   = */ true,
+	/* [FIELD_TYPE_NUMBER]   = */ true,
+	/* [FIELD_TYPE_DOUBLE]   = */ true,
+	/* [FIELD_TYPE_INTEGER]  = */ true,
+	/* [FIELD_TYPE_BOOLEAN]  = */ true,
+	/* [FIELD_TYPE_VARBINARY]= */ true,
+	/* [FIELD_TYPE_SCALAR]   = */ true,
+	/* [FIELD_TYPE_DECIMAL]  = */ true,
+	/* [FIELD_TYPE_UUID]     = */ true,
+	/* [FIELD_TYPE_ARRAY]    = */ false,
+	/* [FIELD_TYPE_MAP]      = */ false,
+	/* [FIELD_TYPE_DATETIME] = */ true,
+};
