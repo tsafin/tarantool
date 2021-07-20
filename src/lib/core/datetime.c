@@ -83,8 +83,8 @@ mp_decode_Xint(const char **data)
 	return 0;
 }
 
-uint32_t
-mp_sizeof_datetime(const struct datetime_t *date)
+static inline uint32_t
+mp_sizeof_datetime_raw(const struct datetime_t *date)
 {
 	uint32_t sz = mp_sizeof_Xint(date->secs);
 
@@ -94,8 +94,13 @@ mp_sizeof_datetime(const struct datetime_t *date)
 		sz += mp_sizeof_Xint(date->nsec);
 	if (date->offset)
 		sz += mp_sizeof_Xint(date->offset);
-
 	return sz;
+}
+
+uint32_t
+mp_sizeof_datetime(const struct datetime_t *date)
+{
+	return mp_sizeof_ext(mp_sizeof_datetime_raw(date));
 }
 
 struct datetime_t *
@@ -112,7 +117,7 @@ datetime_unpack(const char **data, uint32_t len, struct datetime_t *date)
 		return date;
 
 	svp = *data;
-	date->secs = mp_decode_Xint(data);
+	date->nsec = mp_decode_Xint(data);
 	len -= *data - svp;
 
 	if (len <= 0)
@@ -153,7 +158,7 @@ datetime_pack(char *data, const struct datetime_t *date)
 char *
 mp_encode_datetime(char *data, const struct datetime_t *date)
 {
-	uint32_t len = mp_sizeof_datetime(date);
+	uint32_t len = mp_sizeof_datetime_raw(date);
 
 	data = mp_encode_extl(data, MP_DATETIME, len);
 

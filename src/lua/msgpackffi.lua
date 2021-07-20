@@ -26,6 +26,10 @@ char *
 mp_encode_uuid(char *data, const struct tt_uuid *uuid);
 uint32_t
 mp_sizeof_uuid();
+uint32_t
+mp_sizeof_datetime(const struct t_datetime_tz *date);
+char *
+mp_encode_datetime(char *data, const struct t_datetime_tz *date);
 float
 mp_decode_float(const char **data);
 double
@@ -142,6 +146,11 @@ end
 local function encode_uuid(buf, uuid)
     local p = buf:alloc(builtin.mp_sizeof_uuid())
     builtin.mp_encode_uuid(p, uuid)
+end
+
+local function encode_datetime(buf, date)
+    local p = buf:alloc(builtin.mp_sizeof_datetime(date))
+    builtin.mp_encode_datetime(p, date)
 end
 
 local function encode_int(buf, num)
@@ -322,6 +331,7 @@ on_encode(ffi.typeof('float'), encode_float)
 on_encode(ffi.typeof('double'), encode_double)
 on_encode(ffi.typeof('decimal_t'), encode_decimal)
 on_encode(ffi.typeof('struct tt_uuid'), encode_uuid)
+on_encode(ffi.typeof('struct datetime_t'), encode_datetime)
 
 --------------------------------------------------------------------------------
 -- Decoder
