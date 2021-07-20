@@ -120,6 +120,9 @@ extern const uint32_t field_ext_type[];
 extern const struct opt_def field_def_reg[];
 extern const struct field_def field_def_default;
 
+/** helper table for checking allowed indices for types */
+extern const bool field_type_index_allowed[];
+
 /**
  * @brief Field definition
  * Contains information about of one tuple field.
