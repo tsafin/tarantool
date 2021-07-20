@@ -538,6 +538,8 @@ tuple_compare_field_with_type(const char *field_a, enum mp_type a_type,
 						   field_b, b_type);
 	case FIELD_TYPE_UUID:
 		return mp_compare_uuid(field_a, field_b);
+	case FIELD_TYPE_DATETIME:
+		return mp_compare_datetime(field_a, field_b);
 	default:
 		unreachable();
 		return 0;
@@ -1630,6 +1632,18 @@ hint_uuid_raw(const char *data)
 	return hint_create(MP_CLASS_UUID, val);
 }
 
+static inline hint_t
+hint_datetime(struct datetime_t *date)
+{
+	/*
+	 * Use at most HINT_VALUE_BITS from datetime
+	 * seconds field as a hint value
+	 */
+	uint64_t val = (uint64_t)date->secs & HINT_VALUE_MAX;
+
+	return hint_create(MP_CLASS_DATETIME, val);
+}
+
 static inline uint64_t
 hint_str_raw(const char *s, uint32_t len)
 {
@@ -1762,6 +1776,17 @@ field_hint_uuid(const char *field)
 }
 
 static inline hint_t
+field_hint_datetime(const char *field)
+{
+	assert(mp_typeof(*field) == MP_EXT);
+	int8_t ext_type;
+	uint32_t len = mp_decode_extl(&field, &ext_type);
+	assert(ext_type == MP_DATETIME);
+	struct datetime_t date;
+	return hint_datetime(datetime_unpack(&field, len, &date));
+}
+
+static inline hint_t
 field_hint_string(const char *field, struct coll *coll)
 {
 	assert(mp_typeof(*field) == MP_STR);
@@ -1849,6 +1874,8 @@ field_hint(const char *field, struct coll *coll)
 		return field_hint_decimal(field);
 	case FIELD_TYPE_UUID:
 		return field_hint_uuid(field);
+	case FIELD_TYPE_DATETIME:
+		return field_hint_datetime(field);
 	default:
 		unreachable();
 	}
@@ -1962,6 +1989,9 @@ key_def_set_hint_func(struct key_def *def)
 		break;
 	case FIELD_TYPE_UUID:
 		key_def_set_hint_func<FIELD_TYPE_UUID>(def);
+		break;
+	case FIELD_TYPE_DATETIME:
+		key_def_set_hint_func<FIELD_TYPE_DATETIME>(def);
 		break;
 	default:
 		/* Invalid key definition. */
