@@ -365,8 +365,10 @@ end
 -- described via table direction should be +1 or -1
 local function interval_increment(self, o, direction)
     assert(direction == -1 or direction == 1)
-    check_date(self, "interval_increment(date, object, -+1)")
-    assert(type(o) == 'table')
+    check_date(self, "interval_increment(date, object, direction)")
+    if type(o) ~= 'table' then
+        error('interval_increment(date, object, direction) - object expected', 2)
+    end
 
     local ym_updated = false
     local dhms_updated = false
@@ -378,49 +380,43 @@ local function interval_increment(self, o, direction)
     for key, value in pairs(o) do
         local handlers = {
             years = function(v)
-                assert(v > 0 and v < 10000)
+                check_range(v, {0, 9999}, key)
                 dt = cdt.dt_add_years(dt, direction * v, cdt.DT_LIMIT)
                 ym_updated = true
             end,
 
             months = function(v)
-                assert(v > 0 and v < 13 )
+                check_range(v, {0, 12}, key)
                 dt = cdt.dt_add_months(dt, direction * v, cdt.DT_LIMIT)
                 ym_updated = true
             end,
 
             weeks = function(v)
-                assert(v > 0 and v < 32)
+                check_range(v, {0, 52}, key)
                 secs = secs + direction * 7 * v * SECS_PER_DAY
                 dhms_updated = true
             end,
 
             days = function(v)
-                assert(v > 0 and v < 32)
+                check_range(v, {0, 31}, key)
                 secs = secs + direction * v * SECS_PER_DAY
                 dhms_updated = true
             end,
 
             hours = function(v)
-                assert(v >= 0 and v < 24)
+                check_range(v, {0, 23}, key)
                 secs = secs + direction * 60 * 60 * v
                 dhms_updated = true
             end,
 
             minutes = function(v)
-                assert(v >= 0 and v < 60)
+                check_range(v, {0, 59}, key)
                 secs = secs + direction * 60 * v
             end,
 
             seconds = function(v)
-                assert(v >= 0 and v < 61)
-                local s, frac
-                frac = v % 1
-                if frac > 0 then
-                    s = v - (v % 1)
-                else
-                    s = v
-                end
+                check_range(v, {0, 60}, key)
+                local s, frac = seconds_fraction(v)
                 secs = secs + direction * s
                 nsec = nsec + direction * frac * 1e9 -- convert fraction to nanoseconds
                 dhms_updated = true
@@ -448,6 +444,9 @@ end
 
 local datetime_index = function(self, key)
     local attributes = {
+        unixtime = function(self)
+            return self.secs
+        end,
         timestamp = function(self)
             return self.secs + self.nsec / 1e9
         end,
@@ -484,6 +483,24 @@ local datetime_index = function(self, key)
         end,
     }
     return attributes[key] ~= nil and attributes[key](self) or nil
+end
+
+local function datetime_newindex(self, key, value)
+    local attributes = {
+        unixtime = function(self, value)
+            self.secs = value
+            self.nsec, self.offset = 0, 0
+        end,
+        timestamp = function(self, value)
+            local secs, frac = seconds_fraction(value)
+            self.secs = secs
+            self.nsec = frac * 1e9
+            self.offset = 0
+        end,
+    }
+    if attributes[key] ~= nil then
+        attributes[key](self, value)
+    end
 end
 
 local function datetime_new_raw(secs, nsec, offset)
@@ -537,50 +554,45 @@ local function datetime_new(o)
             end,
 
             year = function(v)
-                assert(v > 0 and v < 10000)
+                check_range(v, {1, 9999}, key)
                 y = v
                 ymd = true
             end,
 
             month = function(v)
-                assert(v > 0 and v < 13 )
+                check_range(v, {1, 12}, key)
                 M = v
                 ymd = true
             end,
 
             day = function(v)
-                assert(v > 0 and v < 32)
+                check_range(v, {1, 31}, key)
                 d = v
                 ymd = true
             end,
 
             hour = function(v)
-                assert(v >= 0 and v < 24)
+                check_range(v, {0, 23}, key)
                 h = v
                 hms = true
             end,
 
             minute = function(v)
-                assert(v >= 0 and v < 60)
+                check_range(v, {0, 59}, key)
                 m = v
                 hms = true
             end,
 
             second = function(v)
-                assert(v >= 0 and v < 61)
-                frac = v % 1
-                if frac > 0 then
-                    s = v - (v % 1)
-                else
-                    s = v
-                end
+                check_range(v, {0, 60}, key)
+                s, frac = seconds_fraction(v)
                 frac = frac * 1e9 -- convert fraction to nanoseconds
                 hms = true
             end,
 
             -- tz offset in minutes
             tz = function(v)
-                assert(v >= 0 and v <= 720)
+                check_range(v, {0, 720}, key)
                 offset = v
             end
         }
@@ -937,6 +949,7 @@ local datetime_mt = {
     __sub = datetime_sub,
     __add = datetime_add,
     __index = datetime_index,
+    __newindex = datetime_newindex,
     add = function(self, o)
         self = interval_increment(self, o, 1)
         return self
