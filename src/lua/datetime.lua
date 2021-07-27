@@ -66,6 +66,12 @@ ffi.cdef [[
     dt_t    dt_from_struct_tm  (const struct tm *tm);
     void    dt_to_struct_tm    (dt_t dt, struct tm *tm);
 
+    // datetime.c
+
+    int
+    datetime_to_string(const struct datetime_t * date, char *buf, uint32_t len);
+
+
     // <asm-generic/posix_types.h>
     typedef long            __kernel_long_t;
     typedef unsigned long   __kernel_ulong_t;
@@ -467,6 +473,36 @@ local function datetime_new(o)
     return mk_timestamp(dt, secs, frac, offset)
 end
 
+local function datetime_tostring(o)
+    if ffi.typeof(o) == datetime_t then
+        local sz = 48
+        local buff = ffi.new('char[?]', sz)
+        local len = builtin.datetime_to_string(o, buff, sz)
+        assert(len < sz)
+        return ffi.string(buff)
+    elseif ffi.typeof(o) == interval_t then
+        local ts = o.timestamp
+        local sign = '+'
+
+        if ts < 0 then
+            ts = -ts
+            sign = '-'
+        end
+
+        if ts < 60 then
+            return ('%s%s secs'):format(sign, ts)
+        elseif ts < 60 * 60 then
+            return ('%+d minutes, %s seconds'):format(o.minutes, ts % 60)
+        elseif ts < 24 * 60 * 60 then
+            return ('%+d hours, %d minutes, %s seconds'):format(
+                    o.hours, o.minutes % 60, ts % 60)
+        else
+            return ('%+d days, %d hours, %d minutes, %s seconds'):format(
+                    o.days, o.hours % 24, o.minutes % 60, ts % 60)
+        end
+    end
+end
+
 local function date_first(lhs, rhs)
     if is_datetime(lhs) then
         return lhs, rhs
@@ -710,6 +746,7 @@ local function strftime(fmt, o)
 end
 
 local datetime_mt = {
+    __tostring = datetime_tostring,
     __serialize = datetime_serialize,
     __eq = datetime_eq,
     __lt = datetime_lt,
@@ -721,6 +758,7 @@ local datetime_mt = {
 }
 
 local interval_mt = {
+    __tostring = datetime_tostring,
     __serialize = interval_serialize,
     __eq = datetime_eq,
     __lt = datetime_lt,
@@ -742,6 +780,8 @@ return setmetatable(
         parse_date  = parse_date,
         parse_time  = parse_time,
         parse_zone  = parse_zone,
+
+        tostring    = datetime_tostring,
 
         now         = local_now,
         strftime    = strftime,

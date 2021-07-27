@@ -217,6 +217,7 @@ EXPORT(curl_url_set)
 EXPORT(curl_version)
 EXPORT(curl_version_info)
 #endif /* EXPORT_LIBCURL_SYMBOLS */
+EXPORT(datetime_to_string)
 EXPORT(decimal_unpack)
 EXPORT(dt_dow)
 EXPORT(dt_from_rdn)
