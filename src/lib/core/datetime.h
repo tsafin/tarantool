@@ -40,6 +40,10 @@ extern "C"
 {
 #endif /* defined(__cplusplus) */
 
+#ifndef SECS_PER_DAY
+#define SECS_PER_DAY	86400
+#endif
+
 /**
  * Full datetime structure representing moments
  * since Unix Epoch (1970-01-01).
