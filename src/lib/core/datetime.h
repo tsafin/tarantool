@@ -56,6 +56,15 @@ struct datetime_interval {
 };
 
 /**
+ * Convert datetime to string using default format
+ * @param date source datetime value
+ * @param buf output character buffer
+ * @param len size ofoutput buffer
+ */
+int
+datetime_to_string(const struct datetime *date, char *buf, uint32_t len);
+
+/**
  * Convert datetime to string using default asctime format
  * "Sun Sep 16 01:03:52 1973\n\0"
  * Wrapper around reenterable asctime_r() version of POSIX function

@@ -152,6 +152,7 @@ datetime_asctime
 datetime_ctime
 datetime_now
 datetime_strftime
+datetime_to_string
 datetime_unpack
 decimal_from_string
 decimal_unpack

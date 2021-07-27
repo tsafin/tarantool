@@ -4,6 +4,8 @@
  * Copyright 2021, Tarantool AUTHORS, please see AUTHORS file.
  */
 
+#include <assert.h>
+#include <limits.h>
 #include <string.h>
 #include <time.h>
 
@@ -69,3 +71,72 @@ datetime_strftime(const struct datetime *date, const char *fmt, char *buf,
 	struct tm *p_tm = datetime_to_tm(date);
 	return strftime(buf, len, fmt, p_tm);
 }
+
+#define SECS_EPOCH_1970_OFFSET ((int64_t)DT_EPOCH_1970_OFFSET * SECS_PER_DAY)
+
+/* NB! buf may be NULL, and we should handle it gracefully, returning
+ * calculated length of output string
+ */
+int
+datetime_to_string(const struct datetime *date, char *buf, uint32_t len)
+{
+#define ADVANCE(sz)		\
+	if (buf != NULL) { 	\
+		buf += sz; 	\
+		len -= sz; 	\
+	}			\
+	ret += sz;
+
+	int offset = date->offset;
+	/* for negative offsets around Epoch date we could get
+	 * negative secs value, which should be attributed to
+	 * 1969-12-31, not 1970-01-01, thus we first shift
+	 * epoch to Rata Die then divide by seconds per day,
+	 * not in reverse
+	 */
+	int64_t secs = (int64_t)date->secs + offset * 60 + SECS_EPOCH_1970_OFFSET;
+	assert((secs / SECS_PER_DAY) <= INT_MAX);
+	dt_t dt = dt_from_rdn(secs / SECS_PER_DAY);
+
+	int year, month, day, sec, ns, sign;
+	dt_to_ymd(dt, &year, &month, &day);
+
+	int hour = (secs / 3600) % 24,
+	    minute = (secs / 60) % 60;
+	sec = secs % 60;
+	ns = date->nsec;
+
+	int ret = 0;
+	uint32_t sz = snprintf(buf, len, "%04d-%02d-%02dT%02d:%02d",
+			       year, month, day, hour, minute);
+	ADVANCE(sz);
+	if (sec || ns) {
+		sz = snprintf(buf, len, ":%02d", sec);
+		ADVANCE(sz);
+		if (ns) {
+			if ((ns % 1000000) == 0)
+				sz = snprintf(buf, len, ".%03d", ns / 1000000);
+			else if ((ns % 1000) == 0)
+				sz = snprintf(buf, len, ".%06d", ns / 1000);
+			else
+				sz = snprintf(buf, len, ".%09d", ns);
+			ADVANCE(sz);
+		}
+	}
+	if (offset == 0) {
+		sz = snprintf(buf, len, "Z");
+		ADVANCE(sz);
+	}
+	else {
+		if (offset < 0)
+			sign = '-', offset = -offset;
+		else
+			sign = '+';
+
+		sz = snprintf(buf, len, "%c%02d:%02d", sign, offset / 60, offset % 60);
+		ADVANCE(sz);
+	}
+	return ret;
+}
+#undef ADVANCE
+
