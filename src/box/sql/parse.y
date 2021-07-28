@@ -265,10 +265,10 @@ columnlist ::= tcons.
 //
 %fallback ID
   ABORT ACTION ADD AFTER AUTOINCREMENT BEFORE CASCADE
-  CONFLICT DEFERRED END ENGINE FAIL
-  IGNORE INITIALLY INSTEAD NO MATCH PLAN
+  CONFLICT DAY DATE DEFERRED END ENGINE FAIL
+  HOUR IGNORE INITIALLY INSTEAD NO MATCH MINUTE MONTH PLAN
   QUERY KEY OFFSET RAISE RELEASE REPLACE RESTRICT
-  RENAME CTIME_KW IF ENABLE DISABLE UUID
+  RENAME SECOND YEAR CTIME_KW IF ENABLE DISABLE UUID
   .
 %wildcard ANY.
 
@@ -1836,27 +1836,73 @@ typedef(A) ::= BOOLEAN . { A.type = FIELD_TYPE_BOOLEAN; }
 typedef(A) ::= VARBINARY . { A.type = FIELD_TYPE_VARBINARY; }
 typedef(A) ::= UUID . { A.type = FIELD_TYPE_UUID; }
 
-/**
- * Time-like types are temporary disabled, until they are
- * implemented as a native Tarantool types (gh-3694).
- *
- typedef(A) ::= DATE . { A.type = FIELD_TYPE_NUMBER; }
- typedef(A) ::= TIME . { A.type = FIELD_TYPE_NUMBER; }
- typedef(A) ::= DATETIME . { A.type = FIELD_TYPE_NUMBER; }
-*/
+/// DATE/TIME/TIMESTAMP/INTERVAL
 
+%type opt_timezone {bool}
+opt_timezone(A) ::= WITH TIME ZONE .    { A = true; }
+opt_timezone(A) ::= WITHOUT TIME ZONE . { A = false; }
+opt_timezone(A) ::= .                   { A = false; }
 
-char_len(A) ::= LP INTEGER(B) RP . {
+%type date_typedef {struct type_def}
+typedef(A) ::= date_typedef(A) .
+
+date_typedef(A) ::= TIMESTAMP ignored_len(B) opt_timezone(C) . {
+    (void) B; (void) C;
+    A.type = FIELD_TYPE_DATETIME;
+}
+date_typedef(A) ::= TIMESTAMP opt_timezone(C) . {
+    (void) C;
+    A.type = FIELD_TYPE_DATETIME;
+}
+date_typedef(A) ::= TIME ignored_len(B) opt_timezone(C) . {
+    (void) B; (void) C;
+    A.type = FIELD_TYPE_DATETIME;
+}
+date_typedef(A) ::= TIME opt_timezone(C) . {
+    (void) C;
+    A.type = FIELD_TYPE_DATETIME;
+}
+date_typedef(A) ::= DATE . { A.type = FIELD_TYPE_DATETIME; }
+
+date_typedef(A) ::= INTERVAL opt_interval(B) . {
+    (void) B;
+    A.type = FIELD_TYPE_DATETIME;
+}
+
+%type opt_interval {int}
+opt_interval(A) ::= YEAR . { A = 0x01; }
+opt_interval(A) ::= MONTH . { A = 0x02; }
+opt_interval(A) ::= DAY . { A = 0x03; }
+opt_interval(A) ::= HOUR . { A = 0x04; }
+opt_interval(A) ::= MINUTE . { A = 0x05; }
+opt_interval(A) ::= interval_second(B) . { (void) B; A = 0x06; }
+opt_interval(A) ::= YEAR TO MONTH . { A = 0x12; }
+opt_interval(A) ::= DAY TO HOUR . { A = 0x34; }
+opt_interval(A) ::= DAY TO MINUTE . { A = 0x35; }
+opt_interval(A) ::= DAY TO interval_second(B) . { (void) B; A = 0x36; }
+opt_interval(A) ::= HOUR TO MINUTE . { A = 0x45; }
+opt_interval(A) ::= HOUR TO interval_second(B) . { (void) B; A = 0x46; }
+opt_interval(A) ::= MINUTE TO interval_second(B) . { (void) B; A = 0x56; }
+opt_interval(A) ::= . { A = 0; }
+
+%type interval_second {int}
+interval_second(A) ::= SECOND . { A = 0; }
+interval_second(A) ::= SECOND ignored_len(B) . { (void) B; A = 0; }
+
+/// VARCHAR
+
+ignored_len(A) ::= LP INTEGER(B) RP . {
   (void) A;
   (void) B;
 }
 
-%type char_len {int}
-typedef(A) ::= VARCHAR char_len(B) . {
+%type ignored_len {int}
+typedef(A) ::= VARCHAR ignored_len(B) . {
   A.type = FIELD_TYPE_STRING;
   (void) B;
 }
 
+/// NUMBER/DOUBLE/INTEGER/UNSIGNED
 %type number_typedef {struct type_def}
 typedef(A) ::= number_typedef(A) .
 number_typedef(A) ::= NUMBER . { A.type = FIELD_TYPE_NUMBER; }
