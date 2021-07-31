@@ -23,10 +23,10 @@ for i = 1,16 do\
 end
 
 a = box.space.T:select{}
-err = nil
+err = {}
 for i = 1, #a - 1 do\
-    if tostring(a[i][1]) >= tostring(a[i+1][1]) then\
-        err = {a[i][1], a[i+1][1]}\
+    if a[i][1] >= a[i+1][1] then\
+        table.insert(err, {a[i][1], a[i+1][1]})\
         break\
     end\
 end
