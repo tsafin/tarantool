@@ -30,7 +30,6 @@
  * SUCH DAMAGE.
  */
 
-#include <c-dt/dt.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -49,17 +48,17 @@ extern "C" {
  * datetime structure consisting of:
  */
 struct datetime_t {
-	int64_t secs;	///< seconds since epoch
-	int32_t nsec;	///< nanoseconds if any
-	int32_t offset; ///< offset in minutes from GMT
+	int64_t secs;	/**< seconds since epoch */
+	int32_t nsec;	/**< nanoseconds if any */
+	int32_t offset; /**< offset in minutes from GMT */
 };
 
 /**
  * Date/time delta structure
  */
 struct datetime_interval_t {
-	int64_t secs; ///< relative seconds delta
-	int32_t nsec; ///< nanoseconds delta
+	int64_t secs; /**< relative seconds delta */
+	int32_t nsec; /**< nanoseconds delta */
 };
 
 int
