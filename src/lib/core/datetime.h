@@ -34,6 +34,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include "c-dt/dt.h"
 
 #if defined(__cplusplus)
 extern "C" {
