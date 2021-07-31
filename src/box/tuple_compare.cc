@@ -1540,6 +1540,21 @@ func_index_compare_with_key(struct tuple *tuple, hint_t tuple_hint,
 #define HINT_VALUE_DOUBLE_MAX	(exp2(HINT_VALUE_BITS - 1) - 1)
 #define HINT_VALUE_DOUBLE_MIN	(-exp2(HINT_VALUE_BITS - 1))
 
+/**
+ * We need to squeeze 64 bits of seconds and 32 bits of nanoseconds
+ * into 60 bits of hint value. The idea is to represent wide enough
+ * years range, and leave the rest of bits occupied from nanoseconds part:
+ * - 36 bits is enough for time range of [208BC..4147]
+ * - for nanoseconds there is left 24 bits, which are MSB part of
+ *   32-bit value
+ */
+#define HINT_VALUE_SECS_BITS	36
+#define HINT_VALUE_NSEC_BITS	(HINT_VALUE_BITS - HINT_VALUE_SECS_BITS)
+#define HINT_VALUE_SECS_MAX	((1LL << HINT_VALUE_SECS_BITS) - 1)
+#define HINT_VALUE_SECS_MIN	(-(1LL << HINT_VALUE_SECS_BITS))
+#define HINT_VALUE_NSEC_SHIFT	(sizeof(int) * CHAR_BIT - HINT_VALUE_NSEC_BITS)
+#define HINT_VALUE_NSEC_MAX	((1ULL << HINT_VALUE_NSEC_BITS) - 1)
+
 /*
  * HINT_CLASS_BITS should be big enough to store any mp_class value.
  * Note, ((1 << HINT_CLASS_BITS) - 1) is reserved for HINT_NONE.
@@ -1636,11 +1651,17 @@ static inline hint_t
 hint_datetime(struct datetime_t *date)
 {
 	/*
-	 * Use at most HINT_VALUE_BITS from datetime
-	 * seconds field as a hint value
+	 * Use at most HINT_VALUE_SECS_BITS from datetime
+	 * seconds field as a hint value, and at MSB part
+	 * of HINT_VALUE_NSEC_BITS from nanoseconds.
 	 */
-	uint64_t val = (uint64_t)date->secs & HINT_VALUE_MAX;
-
+	int64_t secs = date->secs;
+	int32_t nsec = date->nsec;
+	uint64_t val = secs <= HINT_VALUE_SECS_MIN ? 0 :
+			secs - HINT_VALUE_SECS_MIN;
+	val &= HINT_VALUE_SECS_MAX;
+	val <<= HINT_VALUE_NSEC_BITS;
+	val |= (nsec >> HINT_VALUE_NSEC_SHIFT) & HINT_VALUE_NSEC_MAX;
 	return hint_create(MP_CLASS_DATETIME, val);
 }
 
@@ -1837,6 +1858,11 @@ field_hint_scalar(const char *field, struct coll *coll)
 		}
 		case MP_UUID:
 			return hint_uuid_raw(field);
+		case MP_DATETIME:
+		{
+			struct datetime_t date;
+			return hint_datetime(datetime_unpack(&field, len, &date));
+		}
 		default:
 			unreachable();
 		}
