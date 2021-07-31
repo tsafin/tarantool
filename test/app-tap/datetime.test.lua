@@ -199,7 +199,7 @@ test:test("Parse tiny date into seconds and other parts", function(test)
     test:ok(tiny.milliseconds == 30528, "milliseconds")
     test:ok(tiny.seconds == 30.528, "seconds")
     test:ok(tiny.timestamp == 30.528, "timestamp")
-    test:ok(tiny.minutes == 0.5088, "minuts")
+    test:ok(tiny.minutes == 0.5088, "minutes")
     test:ok(tiny.hours == 0.00848, "hours")
 end)
 
