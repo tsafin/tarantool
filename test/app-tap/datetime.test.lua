@@ -3,6 +3,8 @@
 local tap = require('tap')
 local test = tap.test("errno")
 local date = require('datetime')
+local ffi = require('ffi')
+
 
 test:plan(10)
 
@@ -86,8 +88,6 @@ test:test("Multiple tests for parser (with nanoseconds)", function(test)
     end
 end)
 
-local ffi = require('ffi')
-
 ffi.cdef [[
     void tzset(void);
 ]]
@@ -134,7 +134,7 @@ test:test("Parse iso date - valid strings", function(test)
     }
 
     for _, value in ipairs(good) do
-        local year, month, day, str, date_part_len;
+        local year, month, day, str, date_part_len
         year, month, day, str, date_part_len = unpack(value)
         local expected_date = date{year = year, month = month, day = day}
         local date_part, len
