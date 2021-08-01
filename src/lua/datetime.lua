@@ -1,8 +1,21 @@
 local ffi = require('ffi')
-local cdt = ffi.C
 
 ffi.cdef [[
 
+    /*
+    `c-dt` library functions handles properly both positive and negative `dt`
+    values, where `dt` is a number of dates since Rata Die date (0001-01-01).
+
+    For better compactness of our typical data in MessagePack stream we shift
+    root of our time to the Unix Epoch date (1970-01-01), thus our 0 is
+    actually dt = 719163.
+
+    So here is a simple formula how convert our epoch-based seconds to dt values
+        dt = (secs / 86400) + 719163
+    Where 719163 is an offset of Unix Epoch (1970-01-01) since Rata Die
+    (0001-01-01) in dates.
+
+    */
     typedef int dt_t;
 
     // dt_core.h
@@ -64,7 +77,7 @@ ffi.cdef [[
     dt_t    dt_from_struct_tm  (const struct tm *tm);
     void    dt_to_struct_tm    (dt_t dt, struct tm *tm);
 
-    // mp_datetime.c
+    // datetime.c
 
     int
     datetime_to_string(const struct datetime_t * date, char *buf, uint32_t len);
@@ -156,7 +169,7 @@ ffi.cdef [[
 
 ]]
 
-local native = ffi.C
+local builtin = ffi.C
 
 local SECS_PER_DAY     = 86400
 local NANOS_PER_SEC    = 1000000000LL
@@ -328,7 +341,7 @@ local function local_rd(o)
 end
 
 local function local_dt(o)
-    return cdt.dt_from_rdn(local_rd(o))
+    return builtin.dt_from_rdn(local_rd(o))
 end
 
 local function _normalize_nsec(secs, nsec)
@@ -512,7 +525,8 @@ local function datetime_new_raw(secs, nsec, offset)
 end
 
 local function mk_timestamp(dt, sp, fp, offset)
-    local epochV = dt ~= nil and (cdt.dt_rdn(dt) - DT_EPOCH_1970_OFFSET) * SECS_PER_DAY or 0
+    local epochV = dt ~= nil and (builtin.dt_rdn(dt) - DT_EPOCH_1970_OFFSET) *
+                   SECS_PER_DAY or 0
     local spV = sp ~= nil and sp or 0
     local fpV = fp ~= nil and fp or 0
     local ofsV = offset ~= nil and offset or 0
@@ -528,11 +542,16 @@ local function datetime_new(o)
     local nsec = 0
     local offset = 0
     local easy_way = false
-    local y, M, d, ymd
-    y, M, d, ymd = 0, 0, 0, false
+    local y = 0
+    local M = 0
+    local d = 0
+    local ymd = false
 
-    local h, m, s, frac, hms
-    h, m, s, frac, hms = 0, 0, 0, 0, false
+    local h = 0
+    local m = 0
+    local s = 0
+    local frac = 0
+    local hms = false
 
     local dt = 0
 
@@ -606,7 +625,7 @@ local function datetime_new(o)
 
     -- .year, .month, .day
     if ymd then
-        dt = dt + cdt.dt_from_ymd(y, M, d)
+        dt = dt + builtin.dt_from_ymd(y, M, d)
     end
 
     -- .hour, .minute, .second
@@ -779,7 +798,7 @@ end
 local function parse_date(str)
     check_str("datetime.parse_date(string)")
     local dt = ffi.new('dt_t[1]')
-    local len = cdt.dt_parse_iso_date(str, #str, dt)
+    local len = builtin.dt_parse_iso_date(str, #str, dt)
     return len > 0 and mk_timestamp(dt[0]) or nil, tonumber(len)
 end
 
@@ -797,8 +816,9 @@ local function parse_time(str)
     check_str("datetime.parse_time(string)")
     local sp = ffi.new('int[1]')
     local fp = ffi.new('int[1]')
-    local len = cdt.dt_parse_iso_time(str, #str, sp, fp)
-    return len > 0 and mk_timestamp(nil, sp[0], fp[0]) or nil, tonumber(len)
+    local len = builtin.dt_parse_iso_time(str, #str, sp, fp)
+    return len > 0 and mk_timestamp(nil, sp[0], fp[0]) or nil,
+           tonumber(len)
 end
 
 --[[
@@ -810,8 +830,9 @@ end
 local function parse_zone(str)
     check_str("datetime.parse_zone(string)")
     local offset = ffi.new('int[1]')
-    local len = cdt.dt_parse_iso_zone_lenient(str, #str, offset)
-    return len > 0 and mk_timestamp(nil, nil, nil, offset[0]) or nil, tonumber(len)
+    local len = builtin.dt_parse_iso_zone_lenient(str, #str, offset)
+    return len > 0 and mk_timestamp(nil, nil, nil, offset[0]) or nil,
+           tonumber(len)
 end
 
 
@@ -826,7 +847,7 @@ local function parse(str)
     check_str("datetime.parse(string)")
     local dt = ffi.new('dt_t[1]')
     local len = #str
-    local n = cdt.dt_parse_iso_date(str, len, dt)
+    local n = builtin.dt_parse_iso_date(str, len, dt)
     local dt_ = dt[0]
     if n == 0 or len == n then
         return mk_timestamp(dt_)
@@ -844,7 +865,7 @@ local function parse(str)
 
     local sp = ffi.new('int[1]')
     local fp = ffi.new('int[1]')
-    local n = cdt.dt_parse_iso_time(str, len, sp, fp)
+    local n = builtin.dt_parse_iso_time(str, len, sp, fp)
     if n == 0 then
         return mk_timestamp(dt_)
     end
@@ -863,7 +884,7 @@ local function parse(str)
     len = #str
 
     local offset = ffi.new('int[1]')
-    n = cdt.dt_parse_iso_zone_lenient(str, len, offset)
+    n = builtin.dt_parse_iso_zone_lenient(str, len, offset)
     if n == 0 then
         return mk_timestamp(dt_, sp_, fp_)
     end
@@ -879,28 +900,27 @@ local function datetime_from(o)
 end
 
 local function local_now()
-    local p_tv = ffi.new ' struct timeval [1] '
-    local rc = native.gettimeofday(p_tv, nil)
+    local p_tv = ffi.new('struct timeval [1]')
+    local rc = builtin.gettimeofday(p_tv, nil)
     assert(rc == 0)
 
     local secs = p_tv[0].tv_sec
     local nsec = p_tv[0].tv_usec * 1000
 
-    local p_time = ffi.new 'time_t[1]'
-    local p_tm = ffi.new 'struct tm[1]'
-    native.time(p_time)
-    native.localtime_r(p_time, p_tm)
-    -- local dt = cdt.dt_from_struct_tm(p_tm)
+    local p_time = ffi.new('time_t[1]')
+    local p_tm = ffi.new('struct tm[1]')
+    builtin.time(p_time)
+    builtin.localtime_r(p_time, p_tm)
     local ofs = p_tm[0].tm_gmtoff / 60 -- convert seconds to minutes
 
-    return datetime_new_raw(secs, nsec, ofs) -- FIXME
+    return datetime_new_raw(secs, nsec, ofs)
 end
 
 local function datetime_to_tm_ptr(o)
     assert(is_datetime(o))
-    local p_tm = ffi.new 'struct tm[1]'
+    local p_tm = ffi.new('struct tm[1]')
     -- dt_to_struct_tm() fills only date data
-    cdt.dt_to_struct_tm(local_dt(o), p_tm)
+    builtin.dt_to_struct_tm(local_dt(o), p_tm)
 
     -- calculate the smaller data (hour, minute,
     -- seconds) using datetime seconds value
@@ -920,25 +940,24 @@ local function asctime(o)
     check_date(o, "datetime:asctime()")
 
     local p_tm = datetime_to_tm_ptr(o)
-    return ffi.string(native.asctime(p_tm))
+    return ffi.string(builtin.asctime(p_tm))
 end
 
 local function ctime(o)
     check_date(o, "datetime:ctime()")
-    local p_time = ffi.new 'time_t[1]'
+    local p_time = ffi.new('time_t[1]')
     p_time[0] = o.secs
-    return ffi.string(native.ctime(p_time))
+    return ffi.string(builtin.ctime(p_time))
 end
 
 local function strftime(fmt, o)
-    check_date(o, "datetime.strftime(fmt, date)")
-    local sz = 50
-    local buff = ffi.new('char[?]', sz)
+    check_date(o, "datetime.strftime()")
     local p_tm = datetime_to_tm_ptr(o)
-    native.strftime(buff, sz, fmt, p_tm)
+    local sz = builtin.strftime(nil, 1024, fmt, p_tm) + 1
+    local buff = ffi.new('char[?]', sz)
+    builtin.strftime(buff, sz, fmt, p_tm)
     return ffi.string(buff)
 end
-
 
 local datetime_mt = {
     __tostring = datetime_tostring,
