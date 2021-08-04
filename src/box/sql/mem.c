@@ -43,6 +43,7 @@
 #include "lua/serializer.h"
 #include "lua/msgpack.h"
 #include "uuid/mp_uuid.h"
+#include "mp_datetime.h"
 #include "mp_decimal.h"
 
 #define CMP_OLD_NEW(a, b, type) (((a) > (type)(b)) - ((a) < (type)(b)))
@@ -75,6 +76,7 @@ enum mem_class {
 	MEM_CLASS_STR,
 	MEM_CLASS_BIN,
 	MEM_CLASS_UUID,
+	MEM_CLASS_DATETIME,
 	mem_class_max,
 };
 
@@ -96,6 +98,8 @@ mem_type_class(enum mem_type type)
 		return MEM_CLASS_BOOL;
 	case MEM_TYPE_UUID:
 		return MEM_CLASS_UUID;
+	case MEM_TYPE_DATETIME:
+		return MEM_CLASS_DATETIME;
 	default:
 		break;
 	}
@@ -156,6 +160,9 @@ mem_str(const struct Mem *mem)
 	}
 	case MEM_TYPE_UUID:
 		tt_uuid_to_string(&mem->u.uuid, buf);
+		return tt_sprintf("%s('%s')", type, buf);
+	case MEM_TYPE_DATETIME:
+		datetime_to_string(&mem->u.date, buf, sizeof buf);
 		return tt_sprintf("%s('%s')", type, buf);
 	case MEM_TYPE_BOOL:
 		return tt_sprintf("%s(%s)", type, mem->u.b ? "TRUE" : "FALSE");
@@ -2033,6 +2040,11 @@ mem_cmp_msgpack(const struct Mem *a, const char **b, int *result,
 			assert(len == UUID_LEN);
 			mem.type = MEM_TYPE_UUID;
 			if (uuid_unpack(b, len, &mem.u.uuid) == NULL)
+				return -1;
+			break;
+		} else if (type == MP_DATETIME) {
+			mem.type = MEM_TYPE_DATETIME;
+			if (datetime_unpack(b, len, &mem.u.date) == NULL)
 				return -1;
 			break;
 		}

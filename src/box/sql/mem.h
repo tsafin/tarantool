@@ -31,6 +31,7 @@
  */
 #include "box/field_def.h"
 #include "uuid/tt_uuid.h"
+#include "datetime.h"
 
 struct sql;
 struct Vdbe;
@@ -53,6 +54,7 @@ enum mem_type {
 	MEM_TYPE_FRAME		= 1 << 11,
 	MEM_TYPE_PTR		= 1 << 12,
 	MEM_TYPE_AGG		= 1 << 13,
+	MEM_TYPE_DATETIME	= 1 << 14,
 };
 
 /*
@@ -75,6 +77,7 @@ struct Mem {
 		struct func *func;
 		struct VdbeFrame *pFrame;	/* Used when flags==MEM_Frame */
 		struct tt_uuid uuid;
+		struct datetime date;
 	} u;
 	/** Type of the value this MEM contains. */
 	enum mem_type type;
