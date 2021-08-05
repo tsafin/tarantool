@@ -59,6 +59,7 @@ struct lua_State;
 struct ibuf;
 typedef struct ibuf box_ibuf_t;
 struct tt_uuid;
+struct datetime;
 
 /**
  * Single global lua_State shared by core and modules.
@@ -71,12 +72,23 @@ extern struct lua_State *tarantool_L;
 extern uint32_t CTID_CHAR_PTR;
 extern uint32_t CTID_CONST_CHAR_PTR;
 extern uint32_t CTID_UUID;
+extern uint32_t CTID_DATETIME;
+extern uint32_t CTID_INTERVAL;
 
 struct tt_uuid *
 luaL_pushuuid(struct lua_State *L);
 
 void
 luaL_pushuuidstr(struct lua_State *L, const struct tt_uuid *uuid);
+
+/**
+ * @brief Push cdata of a datetime type onto the stack.
+ * @param L Lua State
+ * @sa luaL_pushcdata
+ * @return memory associated with this datetime data
+ */
+struct datetime *
+luaL_pushdatetime(struct lua_State *L);
 
 /** \cond public */
 

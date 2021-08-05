@@ -48,6 +48,9 @@ static uint32_t CTID_STRUCT_IBUF_PTR;
 uint32_t CTID_CHAR_PTR;
 uint32_t CTID_CONST_CHAR_PTR;
 uint32_t CTID_UUID;
+uint32_t CTID_DATETIME = 0;
+uint32_t CTID_INTERVAL = 0;
+
 
 void *
 luaL_pushcdata(struct lua_State *L, uint32_t ctypeid)
@@ -118,6 +121,12 @@ luaL_pushuuidstr(struct lua_State *L, const struct tt_uuid *uuid)
 	char str[UUID_STR_LEN + 1];
 	tt_uuid_to_string(uuid, str);
 	lua_pushlstring(L, str, UUID_STR_LEN);
+}
+
+struct datetime *
+luaL_pushdatetime(struct lua_State *L)
+{
+	return luaL_pushcdata(L, CTID_DATETIME);
 }
 
 int
@@ -724,6 +733,24 @@ tarantool_lua_utils_init(struct lua_State *L)
 	(void) rc;
 	CTID_UUID = luaL_ctypeid(L, "struct tt_uuid");
 	assert(CTID_UUID != 0);
+
+	rc = luaL_cdef(L, "struct datetime {"
+			  "double secs;"
+			  "int32_t nsec;"
+			  "int32_t offset;"
+			  "};");
+	assert(rc == 0);
+	(void) rc;
+	CTID_DATETIME = luaL_ctypeid(L, "struct datetime");
+	assert(CTID_DATETIME != 0);
+	rc = luaL_cdef(L, "struct datetime_interval {"
+			  "double secs;"
+			  "int32_t nsec;"
+			  "};");
+	assert(rc == 0);
+	(void) rc;
+	CTID_INTERVAL = luaL_ctypeid(L, "struct datetime_interval");
+	assert(CTID_INTERVAL != 0);
 
 	lua_pushcfunction(L, luaT_newthread_wrapper);
 	luaT_newthread_ref = luaL_ref(L, LUA_REGISTRYINDEX);
