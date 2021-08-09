@@ -29,6 +29,8 @@
  * SUCH DAMAGE.
  */
 
+#include <assert.h>
+#include <limits.h>
 #include <time.h>
 
 #include "trivia/util.h"
@@ -94,13 +96,22 @@ datetime_strftime(const struct datetime *date, const char *fmt, char *buf,
 	return strftime(buf, len, fmt, p_tm);
 }
 
+#define SECS_EPOCH_1970_OFFSET ((int64_t)DT_EPOCH_1970_OFFSET * SECS_PER_DAY)
+
 int
 datetime_to_string(const struct datetime *date, char *buf, uint32_t len)
 {
 	char * src = buf;
 	int offset = date->offset;
-	int64_t secs = date->secs + offset * 60;
-	dt_t dt = dt_from_rdn((secs / SECS_PER_DAY) + 719163);
+	/* for negative offsets around Epoch date we could get
+	 * negative secs value, which should be attributed to
+	 * 1969-12-31, not 1970-01-01, thus we first shift
+	 * epoch to Rata Die then divide by seconds per day,
+	 * not in reverse
+	 */
+	int64_t secs = date->secs + offset * 60 + SECS_EPOCH_1970_OFFSET;
+	assert((secs / SECS_PER_DAY) <= INT_MAX);
+	dt_t dt = dt_from_rdn(secs / SECS_PER_DAY);
 
 	int year, month, day, sec, ns, sign;
 	dt_to_ymd(dt, &year, &month, &day);

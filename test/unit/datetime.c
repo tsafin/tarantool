@@ -5,6 +5,7 @@
 #include <time.h>
 
 #include "unit.h"
+#include "datetime.h"
 
 static const char sample[] = "2012-12-24T15:30Z";
 
@@ -136,18 +137,6 @@ exit:
 	return 0;
 }
 
-/* avoid introducing external datetime.h dependency -
-   just copy paste it for today
-*/
-#define SECS_PER_DAY      86400
-#define DT_EPOCH_1970_OFFSET 719163
-
-struct datetime {
-	int64_t secs;
-	int32_t nsec;
-	int32_t offset;
-};
-
 static int
 local_rd(const struct datetime *dt)
 {
@@ -209,13 +198,59 @@ static void datetime_test(void)
 		is(secs, dt.secs,
 		   "reversible seconds via strftime for '%s", buff);
 	}
+	check_plan();
+}
+
+
+static void
+tostring_datetime_test(void)
+{
+	static struct {
+		const char *string;
+		int64_t     secs;
+		uint32_t    nsec;
+		uint32_t    offset;
+	} tests[] = {
+		{"1970-01-01T02:00+02:00",          0,         0,  120},
+		{"1970-01-01T01:30+01:30",          0,         0,   90},
+		{"1970-01-01T01:00+01:00",          0,         0,   60},
+		{"1970-01-01T00:01+00:01",          0,         0,    1},
+		{"1970-01-01T00:00Z",               0,         0,    0},
+		{"1969-12-31T23:59-00:01",          0,         0,   -1},
+		{"1969-12-31T23:00-01:00",          0,         0,  -60},
+		{"1969-12-31T22:30-01:30",          0,         0,  -90},
+		{"1969-12-31T22:00-02:00",          0,         0, -120},
+		{"1970-01-01T00:00:00.123456789Z",  0, 123456789,    0},
+		{"1970-01-01T00:00:00.123456Z",     0, 123456000,    0},
+		{"1970-01-01T00:00:00.123Z",        0, 123000000,    0},
+		{"1973-11-29T21:33:09Z",    123456789,         0,    0},
+		{"2013-10-28T17:51:56Z",   1382982716,         0,    0},
+		{"9999-12-31T23:59:59Z", 253402300799,         0,    0},
+	};
+	size_t index;
+
+	plan(15);
+	for (index = 0; index < DIM(tests); index++) {
+		struct datetime date = {
+			tests[index].secs,
+			tests[index].nsec,
+			tests[index].offset
+		};
+		char buf[48];
+		datetime_to_string(&date, buf, sizeof buf);
+		is(strcmp(buf, tests[index].string), 0,
+		   "string '%s' expected, received '%s'",
+		   tests[index].string, buf);
+	}
+	check_plan();
 }
 
 int
 main(void)
 {
-	plan(1);
+	plan(2);
 	datetime_test();
+	tostring_datetime_test();
 
 	return check_plan();
 }
