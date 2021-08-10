@@ -449,69 +449,45 @@ local function datetime_new(obj)
 
     local dt = 0
 
-    local handlers = {
-        secs = function(_, v)
-            secs = v
+    for key, value in pairs(obj) do
+        if key == 'secs' then
+            secs = value
             easy_way = true
-        end,
-
-        nsec = function(_, v)
-            nsec = v
+        elseif key == 'nsec' then
+            nsec = value
             easy_way = true
-        end,
-
-        offset = function (_, v)
-            offset = v
+        elseif key == 'offset' then
+            offset = value
             easy_way = true
-        end,
-
-        year = function(k, v)
-            check_range(v, {1, 9999}, k)
-            y = v
+        elseif key == 'year' then
+            check_range(value, {1, 9999}, key)
+            y = value
             ymd = true
-        end,
-
-        month = function(k, v)
-            check_range(v, {1, 12}, k)
-            M = v
+        elseif key == 'month' then
+            check_range(value, {1, 12}, key)
+            M = value
             ymd = true
-        end,
-
-        day = function(k, v)
-            check_range(v, {1, 31}, k)
-            d = v
+        elseif key == 'day' then
+            check_range(value, {1, 31}, key)
+            d = value
             ymd = true
-        end,
-
-        hour = function(k, v)
-            check_range(v, {0, 23}, k)
-            h = v
+        elseif key == 'hour' then
+            check_range(value, {0, 23}, key)
+            h = value
             hms = true
-        end,
-
-        minute = function(k, v)
-            check_range(v, {0, 59}, k)
-            m = v
+        elseif key == 'minute' then
+            check_range(value, {0, 59}, key)
+            m = value
             hms = true
-        end,
-
-        second = function(k, v)
-            check_range(v, {0, 60}, k)
-            s, frac = math_modf(v)
+        elseif key == 'second' then
+            check_range(value, {0, 60}, key)
+            s, frac = math_modf(value)
             frac = frac * 1e9 -- convert fraction to nanoseconds
             hms = true
-        end,
-
+        elseif key == 'tz' then
         -- tz offset in minutes
-        tz = function(k, v)
-            check_range(v, {0, 720}, k)
-            offset = v
-        end
-    }
-    for key, value in pairs(obj) do
-        local handler = handlers[key]
-        if handler ~= nil then
-            handler(key, value)
+            check_range(value, {0, 720}, key)
+            offset = value
         else
             error(('unknown attribute %s'):format(key), 2)
         end
