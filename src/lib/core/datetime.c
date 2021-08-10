@@ -98,10 +98,19 @@ datetime_strftime(const struct datetime *date, const char *fmt, char *buf,
 
 #define SECS_EPOCH_1970_OFFSET ((int64_t)DT_EPOCH_1970_OFFSET * SECS_PER_DAY)
 
+/* NB! buf may be NULL, and we should handle it gracefully, returning
+ * calculated length of output string
+ */
 int
 datetime_to_string(const struct datetime *date, char *buf, uint32_t len)
 {
-	char * src = buf;
+#define ADVANCE(sz)		\
+	if (buf != NULL) { 	\
+		buf += sz; 	\
+		len -= sz; 	\
+	}			\
+	ret += sz;
+
 	int offset = date->offset;
 	/* for negative offsets around Epoch date we could get
 	 * negative secs value, which should be attributed to
@@ -121,12 +130,13 @@ datetime_to_string(const struct datetime *date, char *buf, uint32_t len)
 	sec = secs % 60;
 	ns = date->nsec;
 
+	int ret = 0;
 	uint32_t sz = snprintf(buf, len, "%04d-%02d-%02dT%02d:%02d",
 			       year, month, day, hour, minute);
-	buf += sz; len -= sz;
+	ADVANCE(sz);
 	if (sec || ns) {
 		sz = snprintf(buf, len, ":%02d", sec);
-		buf += sz; len -= sz;
+		ADVANCE(sz);
 		if (ns) {
 			if ((ns % 1000000) == 0)
 				sz = snprintf(buf, len, ".%03d", ns / 1000000);
@@ -134,13 +144,12 @@ datetime_to_string(const struct datetime *date, char *buf, uint32_t len)
 				sz = snprintf(buf, len, ".%06d", ns / 1000);
 			else
 				sz = snprintf(buf, len, ".%09d", ns);
-			buf += sz; len -= sz;
+			ADVANCE(sz);
 		}
 	}
 	if (offset == 0) {
-		strncpy(buf, "Z", len);
-		buf++;
-		len--;
+		sz = snprintf(buf, len, "Z");
+		ADVANCE(sz);
 	}
 	else {
 		if (offset < 0)
@@ -149,10 +158,11 @@ datetime_to_string(const struct datetime *date, char *buf, uint32_t len)
 			sign = '+';
 
 		sz = snprintf(buf, len, "%c%02d:%02d", sign, offset / 60, offset % 60);
-		buf += sz; len -= sz;
+		ADVANCE(sz);
 	}
-	return (buf - src);
+	return ret;
 }
+#undef ADVANCE
 
 int
 datetime_compare(const struct datetime *lhs, const struct datetime *rhs)
