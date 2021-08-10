@@ -277,7 +277,7 @@ mp_datetime_test()
 	};
 	size_t index;
 
-	plan(75);
+	plan(85);
 	for (index = 0; index < DIM(tests); index++) {
 		struct datetime date = {
 			tests[index].secs,
@@ -305,13 +305,75 @@ mp_datetime_test()
 }
 
 
+static int
+mp_fprint_ext_test(FILE *file, const char **data, int depth)
+{
+	(void)depth;
+	int8_t type;
+	uint32_t len = mp_decode_extl(data, &type);
+	if (type != MP_DATETIME)
+		return fprintf(file, "undefined");
+	return mp_fprint_datetime(file, data, len);
+}
+
+static int
+mp_snprint_ext_test(char *buf, int size, const char **data, int depth)
+{
+        (void)depth;
+        int8_t type;
+        uint32_t len = mp_decode_extl(data, &type);
+        if (type != MP_DATETIME)
+                return snprintf(buf, size, "undefined");
+        return mp_snprint_datetime(buf, size, data, len);
+}
+
+static void
+mp_print_test(void)
+{
+	plan(5);
+	header();
+
+	mp_snprint_ext = mp_snprint_ext_test;
+	mp_fprint_ext = mp_fprint_ext_test;
+
+	char sample[64];
+	char buffer[64];
+	char str[64];
+	struct datetime date = {0, 0, 0}; // 1970-01-01T00:00Z
+
+	mp_encode_datetime(buffer, &date);
+	int sz = datetime_to_string(&date, str, sizeof str);
+	int rc = mp_snprint(NULL, 0, buffer);
+	is(rc, sz, "correct mp_snprint size %u with empty buffer", rc);
+	rc = mp_snprint(str, sizeof(str), buffer);
+	is(rc, sz, "correct mp_snprint size %u", rc);
+	datetime_to_string(&date, sample, sizeof sample);
+	is(strcmp(str, sample), 0, "correct mp_snprint result");
+
+	FILE *f = tmpfile();
+	rc = mp_fprint(f, buffer);
+	is(rc, sz, "correct mp_fprint size %u", sz);
+	rewind(f);
+	rc = fread(str, 1, sizeof(str), f);
+	str[rc] = 0;
+	is(strcmp(str, sample), 0, "correct mp_fprint result %u", rc);
+	fclose(f);
+
+	mp_snprint_ext = mp_snprint_ext_default;
+	mp_fprint_ext = mp_fprint_ext_default;
+
+	footer();
+	check_plan();
+}
+
 int
 main(void)
 {
-	plan(3);
+	plan(4);
 	datetime_test();
 	tostring_datetime_test();
 	mp_datetime_test();
+	mp_print_test();
 
 	return check_plan();
 }
