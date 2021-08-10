@@ -14,6 +14,7 @@ local uri = require('uri')
 local json = require('json')
 local msgpackffi = require('msgpackffi')
 local decimal = require('decimal')
+local datetime = require('datetime')
 
 local function test_uuid(test)
     test:plan(1)
@@ -256,15 +257,86 @@ local function test_decimal(test)
     test:ok(is_success, 'decimal str in gc')
 end
 
+local function test_datetime_asctime(test)
+    test:plan(1)
+
+    local gc_count = 100
+    local iter_count = 1000
+    local is_success = true
+
+    local T1 = datetime('1970-01-01')
+    local T2 = datetime('2000-01-01')
+
+    local function datetime_asctime()
+        local str1 = datetime.asctime(T1)
+        local str2 = datetime.asctime(T2)
+        local str3 = datetime.asctime(T1)
+        local str4 = datetime.asctime(T2)
+        if str1 ~= str3 or str2 ~= str4 then
+            is_success = false
+        end
+    end
+
+    local function create_gc()
+        for _ = 1, gc_count do
+            ffi.gc(ffi.new('char[1]'), function() datetime_asctime() end)
+        end
+    end
+
+    for _ = 1, iter_count do
+        create_gc()
+        datetime_asctime()
+    end
+
+    test:ok(is_success, 'info datetime in gc')
+end
+
+local function test_datetime_ctime(test)
+    test:plan(1)
+
+    local gc_count = 100
+    local iter_count = 1000
+    local is_success = true
+
+    local T1 = datetime('1970-01-01')
+    local T2 = datetime('2000-01-01')
+
+    local function datetime_ctime()
+        local str1 = datetime.ctime(T1)
+        local str2 = datetime.ctime(T2)
+        local str3 = datetime.ctime(T1)
+        local str4 = datetime.ctime(T2)
+        if str1 ~= str3 or str2 ~= str4 then
+            is_success = false
+        end
+    end
+
+    local function create_gc()
+        for _ = 1, gc_count do
+            ffi.gc(ffi.new('char[1]'), function() datetime_ctime() end)
+        end
+    end
+
+    for _ = 1, iter_count do
+        create_gc()
+        datetime_ctime()
+    end
+
+    test:ok(is_success, 'info datetime in gc')
+end
+
+
 box.cfg{}
 
 local test = tap.test('gh-5632-6050-6259-gc-buf-reuse')
-test:plan(6)
+test:plan(8)
 test:test('uuid in __gc', test_uuid)
 test:test('uri in __gc', test_uri)
 test:test('msgpackffi in __gc', test_msgpackffi)
 test:test('json in __gc', test_json)
 test:test('info uuid in __gc', test_info_uuid)
 test:test('decimal str in __gc', test_decimal)
+test:test('datetime.asctime in __gc', test_datetime_asctime)
+test:test('datetime.ctime in __gc', test_datetime_ctime)
 
 os.exit(test:check() and 0 or 1)

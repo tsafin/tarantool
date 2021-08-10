@@ -60,7 +60,7 @@ datetime_to_tm(const struct datetime *date)
 }
 
 void
-datetime_now(struct datetime * now)
+datetime_now(struct datetime *now)
 {
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
