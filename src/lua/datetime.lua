@@ -19,36 +19,10 @@ ffi.cdef [[
     typedef int dt_t;
 
     // dt_core.h
-    typedef enum {
-        DT_MON       = 1,
-        DT_MONDAY    = 1,
-        DT_TUE       = 2,
-        DT_TUESDAY   = 2,
-        DT_WED       = 3,
-        DT_WEDNESDAY = 3,
-        DT_THU       = 4,
-        DT_THURSDAY  = 4,
-        DT_FRI       = 5,
-        DT_FRIDAY    = 5,
-        DT_SAT       = 6,
-        DT_SATURDAY  = 6,
-        DT_SUN       = 7,
-        DT_SUNDAY    = 7,
-    } dt_dow_t;
-
     dt_t     dt_from_rdn     (int n);
-    dt_t     dt_from_yd      (int y, int d);
     dt_t     dt_from_ymd     (int y, int m, int d);
-    dt_t     dt_from_yqd     (int y, int q, int d);
-    dt_t     dt_from_ywd     (int y, int w, int d);
-
-    void     dt_to_yd        (dt_t dt, int *y, int *d);
-    void     dt_to_ymd       (dt_t dt, int *y, int *m, int *d);
-    void     dt_to_yqd       (dt_t dt, int *y, int *q, int *d);
-    void     dt_to_ywd       (dt_t dt, int *y, int *w, int *d);
 
     int      dt_rdn          (dt_t dt);
-    dt_dow_t dt_dow          (dt_t dt);
 
     // dt_arithmetic.h
     typedef enum {
@@ -58,24 +32,12 @@ ffi.cdef [[
     } dt_adjust_t;
 
     dt_t    dt_add_years        (dt_t dt, int delta, dt_adjust_t adjust);
-    dt_t    dt_add_quarters     (dt_t dt, int delta, dt_adjust_t adjust);
     dt_t    dt_add_months       (dt_t dt, int delta, dt_adjust_t adjust);
 
     // dt_parse_iso.h
     size_t dt_parse_iso_date          (const char *str, size_t len, dt_t *dt);
-
     size_t dt_parse_iso_time          (const char *str, size_t len, int *sod, int *nsec);
-    size_t dt_parse_iso_time_basic    (const char *str, size_t len, int *sod, int *nsec);
-    size_t dt_parse_iso_time_extended (const char *str, size_t len, int *sod, int *nsec);
-
-    size_t dt_parse_iso_zone          (const char *str, size_t len, int *offset);
-    size_t dt_parse_iso_zone_basic    (const char *str, size_t len, int *offset);
-    size_t dt_parse_iso_zone_extended (const char *str, size_t len, int *offset);
     size_t dt_parse_iso_zone_lenient  (const char *str, size_t len, int *offset);
-
-    // dt_tm.h
-    dt_t    dt_from_struct_tm  (const struct tm *tm);
-    void    dt_to_struct_tm    (dt_t dt, struct tm *tm);
 
     // datetime.c
     int
