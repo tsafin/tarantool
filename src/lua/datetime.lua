@@ -334,79 +334,49 @@ local function interval_increment(self, o, direction)
     return self
 end
 
-local datetime_index_handlers = {
-    unixtime = function(self)
-        return self.secs
-    end,
-
-    timestamp = function(self)
-        return tonumber(self.secs) + self.nsec / 1e9
-    end,
-
-    nanoseconds = function(self)
-        return self.secs * 1e9 + self.nsec
-    end,
-
-    microseconds = function(self)
-        return self.secs * 1e6 + self.nsec / 1e3
-    end,
-
-    milliseconds = function(self)
-        return self.secs * 1e3 + self.nsec / 1e6
-    end,
-
-    seconds = function(self)
-        return tonumber(self.secs) + self.nsec / 1e9
-    end,
-
-    minutes = function(self)
-        return (tonumber(self.secs) + self.nsec / 1e9) / 60
-    end,
-
-    hours = function(self)
-        return (tonumber(self.secs) + self.nsec / 1e9) / (60 * 60)
-    end,
-
-    days = function(self)
-        return (tonumber(self.secs) + self.nsec / 1e9) / (24 * 60 * 60)
-    end,
-
-    add = function(self)
-        return function(self, o)
-            return interval_increment(self, o, 1)
-        end
-    end,
-
-    sub = function(self)
-        return function(self, o)
-            return interval_increment(self, o, -1)
-        end
-    end,
-}
-
 local datetime_index = function(self, key)
-    local handler = datetime_index_handlers[key]
-    return handler ~= nil and handler(self)
+    if key == 'unixtime' then
+        return self.secs
+    elseif key == 'timestamp' then
+        return tonumber(self.secs) + self.nsec / 1e9
+    elseif key == 'nanoseconds' then
+        return self.secs * 1e9 + self.nsec
+    elseif key == 'microseconds' then
+        return self.secs * 1e6 + self.nsec / 1e3
+    elseif key == 'milliseconds' then
+        return self.secs * 1e3 + self.nsec / 1e6
+    elseif key == 'seconds' then
+        return tonumber(self.secs) + self.nsec / 1e9
+    elseif key == 'minutes' then
+        return (tonumber(self.secs) + self.nsec / 1e9) / 60
+    elseif key == 'hours' then
+        return (tonumber(self.secs) + self.nsec / 1e9) / (60 * 60)
+    elseif key == 'days' then
+        return (tonumber(self.secs) + self.nsec / 1e9) / (24 * 60 * 60)
+    elseif key == 'add' then
+        return function(self, obj)
+            return interval_increment(self, obj, 1)
+        end
+    elseif key == 'sub' then
+        return function(self, obj)
+            return interval_increment(self, obj, -1)
+        end
+    else
+        error(('unknown attribute %s'):format(key), 2)
+    end
 end
 
-local datetime_newindex_handlers = {
-    unixtime = function(self, value)
+local function datetime_newindex(self, key, value)
+    if key == 'unixtime' then
         self.secs = value
         self.nsec, self.offset = 0, 0
-    end,
-
-    timestamp = function(self, value)
+    elseif key == 'timestamp' then
         local secs, frac = math_modf(value)
         self.secs = secs
         self.nsec = frac * 1e9
         self.offset = 0
-    end,
-}
-
-local function datetime_newindex(self, key, value)
-    local handler = datetime_newindex_handlers[key]
-    if handler ~= nil then
-        handler(self, value)
+    else
+        error(('assigning to unknown attribute %s'):format(key), 2)
     end
 end
 
