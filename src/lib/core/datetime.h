@@ -41,8 +41,8 @@ extern "C"
 #endif /* defined(__cplusplus) */
 
 #ifndef SECS_PER_DAY
-#define SECS_PER_DAY	86400
-#define DT_EPOCH_1970_OFFSET 719163
+#define SECS_PER_DAY          86400
+#define DT_EPOCH_1970_OFFSET  719163
 #endif
 
 /**
