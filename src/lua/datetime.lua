@@ -82,10 +82,10 @@ ffi.cdef [[
     datetime_to_string(const struct datetime * date, char *buf, uint32_t len);
 
     char *
-    datetime_asctime(const struct datetime *date);
+    datetime_asctime(const struct datetime *date, char *buf);
 
     char *
-    datetime_ctime(const struct datetime *date);
+    datetime_ctime(const struct datetime *date, char *buf);
 
     size_t
     datetime_strftime(const struct datetime *date, const char *fmt, char *buf,
@@ -848,15 +848,19 @@ local function local_now()
     return d
 end
 
+-- sizeof("Wed Jun 30 21:49:08 1993\n")
+local buf_len = 26
+
 local function asctime(o)
     check_date(o, "datetime:asctime()")
-
-    return ffi.string(builtin.datetime_asctime(o))
+    local buf = ffi.new('char[?]', buf_len)
+    return ffi.string(builtin.datetime_asctime(o, buf))
 end
 
 local function ctime(o)
     check_date(o, "datetime:ctime()")
-    return ffi.string(builtin.datetime_ctime(o))
+    local buf = ffi.new('char[?]', buf_len)
+    return ffi.string(builtin.datetime_ctime(o, buf))
 end
 
 local function strftime(fmt, o)

@@ -75,17 +75,17 @@ datetime_now(struct datetime *now)
 }
 
 char *
-datetime_asctime(const struct datetime *date)
+datetime_asctime(const struct datetime *date, char *buf)
 {
 	struct tm *p_tm = datetime_to_tm(date);
-	return asctime(p_tm);
+	return asctime_r(p_tm, buf);
 }
 
 char *
-datetime_ctime(const struct datetime *date)
+datetime_ctime(const struct datetime *date, char *buf)
 {
 	time_t time = date->secs;
-	return ctime(&time);
+	return ctime_r(&time, buf);
 }
 
 size_t
