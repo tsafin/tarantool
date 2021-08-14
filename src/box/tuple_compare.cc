@@ -481,9 +481,8 @@ tuple_compare_field(const char *field_a, const char *field_b,
 						    field_b,
 						    mp_typeof(*field_b));
 	case FIELD_TYPE_NUMBER:
-		return mp_compare_number(field_a, field_b);
 	case FIELD_TYPE_DOUBLE:
-		return mp_compare_double(field_a, field_b);
+		return mp_compare_number(field_a, field_b);
 	case FIELD_TYPE_BOOLEAN:
 		return mp_compare_bool(field_a, field_b);
 	case FIELD_TYPE_VARBINARY:
@@ -1733,8 +1732,22 @@ field_hint_integer(const char *field)
 static inline hint_t
 field_hint_double(const char *field)
 {
-	assert(mp_typeof(*field) == MP_DOUBLE);
-	return hint_double(mp_decode_double(&field));
+	double value;
+
+	switch (mp_typeof(*field)) {
+	case MP_UINT:
+		value = (double)mp_decode_uint(&field);
+		break;
+	case MP_INT:
+		value = (double)mp_decode_int(&field);
+		break;
+	case MP_DOUBLE:
+		value = mp_decode_double(&field);
+		break;
+	default:
+		unreachable();
+	}
+	return hint_double(value);
 }
 
 static inline hint_t
