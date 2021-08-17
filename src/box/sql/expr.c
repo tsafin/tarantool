@@ -3487,6 +3487,13 @@ sqlExprCodeGetColumn(Parse *pParse, int iColumn, int iTable, int iReg, u8 p5)
 	}
 	assert(v != 0);
 	sqlVdbeAddOp3(v, OP_Column, iTable, iColumn, iReg);
+	/* If the column has type DOUBLE, it may currently be stored as an
+	* integer. Use OP_Realify to make sure it is really real.
+	*/
+	//if (pExpr->iColumn >= 0 && def->fields[
+	//	pExpr->iColumn].type == FIELD_TYPE_DOUBLE) {
+		sqlVdbeAddOp1(v, OP_Realify, iReg);
+	//}
 	if (p5) {
 		sqlVdbeChangeP5(v, p5);
 	} else {
@@ -3663,9 +3670,8 @@ sqlExprCodeTarget(Parse * pParse, Expr * pExpr, int target)
 						  pAggInfo->sortingIdxPTab,
 						  pCol->iSorterColumn, target);
 				if (pCol->space_def->fields[pExpr->iAgg].type ==
-				    FIELD_TYPE_NUMBER) {
-					sqlVdbeAddOp1(v, OP_Realify,
-							  target);
+				    FIELD_TYPE_DOUBLE) {
+					sqlVdbeAddOp1(v, OP_Realify, target);
 				}
 				return target;
 			}
@@ -4219,11 +4225,11 @@ sqlExprCodeTarget(Parse * pParse, Expr * pExpr, int target)
 				    pExpr->space_def->fields[
 					pExpr->iColumn].name, target));
 
-			/* If the column has type NUMBER, it may currently be stored as an
+			/* If the column has type DOUBLE, it may currently be stored as an
 			 * integer. Use OP_Realify to make sure it is really real.
 			 */
 			if (pExpr->iColumn >= 0 && def->fields[
-				pExpr->iColumn].type == FIELD_TYPE_NUMBER) {
+				pExpr->iColumn].type == FIELD_TYPE_DOUBLE) {
 				sqlVdbeAddOp1(v, OP_Realify, target);
 			}
 			break;

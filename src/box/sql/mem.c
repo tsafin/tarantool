@@ -1731,7 +1731,8 @@ mem_div(const struct Mem *left, const struct Mem *right, struct Mem *result)
 			 "number");
 		return -1;
 	}
-	if (((left->type | right->type) & MEM_TYPE_DOUBLE) != 0) {
+	if (((left->field_type | right->field_type) & FIELD_TYPE_DOUBLE) != 0)
+	{
 		double a;
 		double b;
 		mem_get_double(left, &a);
