@@ -1,8 +1,6 @@
 local ffi = require('ffi')
 
-ffi.cdef [[
-
-    /*
+--[[
     `c-dt` library functions handles properly both positive and negative `dt`
     values, where `dt` is a number of dates since Rata Die date (0001-01-01).
 
@@ -14,22 +12,27 @@ ffi.cdef [[
         dt = (secs / 86400) + 719163
     Where 719163 is an offset of Unix Epoch (1970-01-01) since Rata Die
     (0001-01-01) in dates.
+]]
 
-    */
+-- dt_core.h definitions
+ffi.cdef [[
     typedef int dt_t;
 
-    // dt_core.h
     dt_t     tnt_dt_from_rdn     (int n);
     dt_t     tnt_dt_from_ymd     (int y, int m, int d);
 
     int      tnt_dt_rdn          (dt_t dt);
+]]
 
-    // dt_parse_iso.h
+-- dt_parse_iso.h definitions
+ffi.cdef [[
     size_t tnt_dt_parse_iso_date          (const char *str, size_t len, dt_t *dt);
     size_t tnt_dt_parse_iso_time          (const char *str, size_t len, int *sod, int *nsec);
     size_t tnt_dt_parse_iso_zone_lenient  (const char *str, size_t len, int *offset);
+]]
 
-    // datetime.c
+-- Tarantool functions - datetime.c
+ffi.cdef [[
     int
     datetime_to_string(const struct datetime * date, char *buf, uint32_t len);
 
@@ -45,7 +48,6 @@ ffi.cdef [[
 
     void
     datetime_now(struct datetime * now);
-
 ]]
 
 local builtin = ffi.C
