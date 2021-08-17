@@ -114,7 +114,7 @@ datetime_strftime(const struct datetime *date, const char *fmt, char *buf,
 		  uint32_t len);
 
 void
-datetime_now(struct datetime * now);
+datetime_now(struct datetime *now);
 
 #if defined(__cplusplus)
 } /* extern "C" */
