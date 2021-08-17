@@ -1,33 +1,11 @@
 /*
+ * SPDX-License-Identifier: BSD-2-Clause
+ *
  * Copyright 2021, Tarantool AUTHORS, please see AUTHORS file.
- *
- * Redistribution and use in source and binary forms, with or
- * without modification, are permitted provided that the following
- * conditions are met:
- *
- * 1. Redistributions of source code must retain the above
- *    copyright notice, this list of conditions and the
- *    following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above
- *    copyright notice, this list of conditions and the following
- *    disclaimer in the documentation and/or other materials
- *    provided with the distribution.
- *
- * THIS SOFTWARE IS PROVIDED BY <COPYRIGHT HOLDER> ``AS IS'' AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
- * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
- * <COPYRIGHT HOLDER> OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
- * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
- * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
- * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
- * THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
- * SUCH DAMAGE.
  */
+
+#include <limits.h>
+#include <assert.h>
 
 #include "mp_datetime.h"
 #include "msgpuck.h"
@@ -37,9 +15,9 @@
   Datetime MessagePack serialization schema is MP_EXT (0xC7 for 1 byte length)
   extension, which creates container of 1 to 3 integers.
 
-  +----+---+-----------+====~~~~~~~====+-----~~~~~~~~-------+....~~~~~~~....+
-  |0xC7| 4 |len (uint8)| seconds (int) | nanoseconds (uint) | offset (uint) |
-  +----+---+-----------+====~~~~~~~====+-----~~~~~~~~-------+....~~~~~~~....+
+  +----+-----------+---+====~~~~~~~====+-----~~~~~~~~-------+....~~~~~~~....+
+  |0xC7|len (uint8)| 4 | seconds (int) | nanoseconds (uint) | offset (int)  |
+  +----+-----------+---+====~~~~~~~====+-----~~~~~~~~-------+....~~~~~~~....+
 
   MessagePack extension MP_EXT (0xC7), after 1-byte length, contains:
 
@@ -50,7 +28,7 @@
     If this value is 0 then it's not saved (unless there is offset field,
     as below);
 
-  - [optional] timzeone offset in minutes as unsigned integer.
+  - [optional] timezone offset in minutes as signed integer.
     If this field is 0 then it's not saved.
  */
 
@@ -80,17 +58,34 @@ mp_decode_Xint(const char **data)
 	return 0;
 }
 
+#define check_secs(secs)                                \
+	assert((int64_t)(secs) <= MAX_EPOCH_SECS_VALUE);\
+	assert((int64_t)(secs) >= MIN_EPOCH_SECS_VALUE);
+
+#define check_nanosecs(nsec)      assert((nsec) < 1000000000);
+
+#define check_tz_offset(offset)       \
+	assert((offset) <= (12 * 60));\
+	assert((offset) >= (-12 * 60));
+
 static inline uint32_t
 mp_sizeof_datetime_raw(const struct datetime *date)
 {
+	check_secs(date->secs);
 	uint32_t sz = mp_sizeof_Xint(date->secs);
 
-	// even if nanosecs == 0 we need to output anything
-	// if we have non-null tz offset
-	if (date->nsec != 0 || date->offset != 0)
+	/*
+	 * even if nanosecs == 0 we need to output something
+	 * if we have a non-null tz offset
+	 */
+	if (date->nsec != 0 || date->offset != 0) {
+		check_nanosecs(date->nsec);
 		sz += mp_sizeof_Xint(date->nsec);
-	if (date->offset)
+	}
+	if (date->offset) {
+		check_tz_offset(date->offset);
 		sz += mp_sizeof_Xint(date->offset);
+	}
 	return sz;
 }
 
@@ -103,24 +98,30 @@ mp_sizeof_datetime(const struct datetime *date)
 struct datetime *
 datetime_unpack(const char **data, uint32_t len, struct datetime *date)
 {
-	const char * svp = *data;
+	const char *svp = *data;
 
 	memset(date, 0, sizeof(*date));
 
-	date->secs = mp_decode_Xint(data);
+	int64_t seconds = mp_decode_Xint(data);
+	check_secs(seconds);
+	date->secs = seconds;
 
 	len -= *data - svp;
 	if (len <= 0)
 		return date;
 
 	svp = *data;
-	date->nsec = mp_decode_Xint(data);
+	uint64_t nanoseconds = mp_decode_uint(data);
+	check_nanosecs(nanoseconds);
+	date->nsec = nanoseconds;
 	len -= *data - svp;
 
 	if (len <= 0)
 		return date;
 
-	date->offset = mp_decode_Xint(data);
+	int64_t offset = mp_decode_Xint(data);
+	check_tz_offset(offset);
+	date->offset = offset;
 
 	return date;
 }
@@ -131,10 +132,12 @@ mp_decode_datetime(const char **data, struct datetime *date)
 	if (mp_typeof(**data) != MP_EXT)
 		return NULL;
 
+	const char *svp = *data;
 	int8_t type;
 	uint32_t len = mp_decode_extl(data, &type);
 
 	if (type != MP_DATETIME || len == 0) {
+		*data = svp;
 		return NULL;
 	}
 	return datetime_unpack(data, len, date);
@@ -145,7 +148,7 @@ datetime_pack(char *data, const struct datetime *date)
 {
 	data = mp_encode_Xint(data, date->secs);
 	if (date->nsec != 0 || date->offset != 0)
-		data = mp_encode_Xint(data, date->nsec);
+		data = mp_encode_uint(data, date->nsec);
 	if (date->offset)
 		data = mp_encode_Xint(data, date->offset);
 
@@ -165,7 +168,9 @@ mp_encode_datetime(char *data, const struct datetime *date)
 int
 mp_snprint_datetime(char *buf, int size, const char **data, uint32_t len)
 {
-	struct datetime date = {0, 0, 0};
+	struct datetime date = {
+		.secs = 0, .nsec = 0, .offset = 0
+	};
 
 	if (datetime_unpack(data, len, &date) == NULL)
 		return -1;
@@ -176,7 +181,9 @@ mp_snprint_datetime(char *buf, int size, const char **data, uint32_t len)
 int
 mp_fprint_datetime(FILE *file, const char **data, uint32_t len)
 {
-	struct datetime date = {0, 0, 0};
+	struct datetime date = {
+		.secs = 0, .nsec = 0, .offset = 0
+	};
 
 	if (datetime_unpack(data, len, &date) == NULL)
 		return -1;
