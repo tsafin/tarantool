@@ -62,7 +62,7 @@ struct datetime_interval {
  * @param len size ofoutput buffer
  */
 int
-datetime_to_string(const struct datetime *date, char *buf, uint32_t len);
+datetime_to_string(const struct datetime *date, char *buf, int len);
 
 /**
  * Convert datetime to string using default asctime format

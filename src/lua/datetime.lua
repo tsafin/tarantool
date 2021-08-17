@@ -34,7 +34,7 @@ ffi.cdef [[
 -- Tarantool functions - datetime.c
 ffi.cdef [[
     int
-    datetime_to_string(const struct datetime * date, char *buf, uint32_t len);
+    datetime_to_string(const struct datetime * date, char *buf, int len);
 
     char *
     datetime_asctime(const struct datetime *date, char *buf);
