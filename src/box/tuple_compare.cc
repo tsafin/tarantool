@@ -1550,8 +1550,8 @@ func_index_compare_with_key(struct tuple *tuple, hint_t tuple_hint,
  */
 #define HINT_VALUE_SECS_BITS	36
 #define HINT_VALUE_NSEC_BITS	(HINT_VALUE_BITS - HINT_VALUE_SECS_BITS)
-#define HINT_VALUE_SECS_MAX	((1LL << HINT_VALUE_SECS_BITS) - 1)
-#define HINT_VALUE_SECS_MIN	(-(1LL << HINT_VALUE_SECS_BITS))
+#define HINT_VALUE_SECS_MAX	((1LL << (HINT_VALUE_SECS_BITS - 1)) - 1)
+#define HINT_VALUE_SECS_MIN	(-(1LL << (HINT_VALUE_SECS_BITS - 1)))
 #define HINT_VALUE_NSEC_SHIFT	(sizeof(int) * CHAR_BIT - HINT_VALUE_NSEC_BITS)
 #define HINT_VALUE_NSEC_MAX	((1ULL << HINT_VALUE_NSEC_BITS) - 1)
 
