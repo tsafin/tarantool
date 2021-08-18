@@ -864,8 +864,8 @@ dump_node(struct lua_dumper *d, struct node *nd, int indent)
 		case MP_DATETIME:
 			nd->mask |= NODE_QUOTE;
 			str = buf;
-			len = datetime_to_string(field->dateval, buf,
-						 sizeof(buf));
+			len = datetime_to_string(buf, sizeof(buf),
+						 field->dateval);
 			break;
 		default:
 			d->err = EINVAL;

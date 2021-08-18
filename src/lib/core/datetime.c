@@ -119,3 +119,13 @@ datetime_to_string(char *buf, int len, const struct datetime *date)
 	}
 	return sz;
 }
+
+int
+datetime_compare(const struct datetime *lhs, const struct datetime *rhs)
+{
+	int result = COMPARE_RESULT(lhs->epoch, rhs->epoch);
+	if (result != 0)
+		return result;
+
+	return COMPARE_RESULT(lhs->nsec, rhs->nsec);
+}

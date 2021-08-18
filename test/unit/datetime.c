@@ -282,12 +282,13 @@ mp_datetime_test()
 	};
 	size_t index;
 
-	plan(68);
+	plan(85);
 	for (index = 0; index < lengthof(tests); index++) {
 		struct datetime date = {
 			tests[index].secs,
 			tests[index].nsec,
-			tests[index].offset
+			tests[index].offset,
+			0
 		};
 		char buf[24], *data = buf;
 		const char *data1 = buf;
@@ -304,6 +305,7 @@ mp_datetime_test()
 		struct datetime *rc = mp_decode_datetime(&data1, &ret);
 		is(rc, &ret, "mp_decode_datetime() return code");
 		is(data1, end, "data1 == end (%lu)", data1 - end);
+		is(datetime_compare(&date, &ret), 0, "datetime_compare(&date, &ret)");
 	}
 	check_plan();
 }
@@ -343,7 +345,7 @@ mp_print_test(void)
 	char sample[64];
 	char buffer[64];
 	char str[64];
-	struct datetime date = {0, 0, 0}; // 1970-01-01T00:00Z
+	struct datetime date = { .epoch = 0 }; // 1970-01-01T00:00Z
 
 	mp_encode_datetime(buffer, &date);
 	int sz = datetime_to_string(str, sizeof(str), &date);
