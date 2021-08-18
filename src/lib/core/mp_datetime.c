@@ -33,19 +33,20 @@
  */
 
 static inline uint32_t
-mp_sizeof_Xint(int64_t n)
+mp_sizeof_xint(int64_t n)
 {
 	return n < 0 ? mp_sizeof_int(n) : mp_sizeof_uint(n);
 }
 
 static inline char *
-mp_encode_Xint(char *data, int64_t v)
+mp_encode_xint(char *data, int64_t v)
 {
+	assert((uint64_t)v <= LONG_MAX);
 	return v < 0 ? mp_encode_int(data, v) : mp_encode_uint(data, v);
 }
 
 static inline int64_t
-mp_decode_Xint(const char **data)
+mp_decode_xint(const char **data)
 {
 	switch (mp_typeof(**data)) {
 	case MP_UINT:
@@ -72,7 +73,7 @@ static inline uint32_t
 mp_sizeof_datetime_raw(const struct datetime *date)
 {
 	check_secs(date->secs);
-	uint32_t sz = mp_sizeof_Xint(date->secs);
+	uint32_t sz = mp_sizeof_xint(date->secs);
 
 	/*
 	 * even if nanosecs == 0 we need to output something
@@ -80,11 +81,11 @@ mp_sizeof_datetime_raw(const struct datetime *date)
 	 */
 	if (date->nsec != 0 || date->offset != 0) {
 		check_nanosecs(date->nsec);
-		sz += mp_sizeof_Xint(date->nsec);
+		sz += mp_sizeof_xint(date->nsec);
 	}
-	if (date->offset) {
+	if (date->offset != 0) {
 		check_tz_offset(date->offset);
-		sz += mp_sizeof_Xint(date->offset);
+		sz += mp_sizeof_xint(date->offset);
 	}
 	return sz;
 }
@@ -102,7 +103,7 @@ datetime_unpack(const char **data, uint32_t len, struct datetime *date)
 
 	memset(date, 0, sizeof(*date));
 
-	int64_t seconds = mp_decode_Xint(data);
+	int64_t seconds = mp_decode_xint(data);
 	check_secs(seconds);
 	date->secs = seconds;
 
@@ -119,7 +120,7 @@ datetime_unpack(const char **data, uint32_t len, struct datetime *date)
 	if (len <= 0)
 		return date;
 
-	int64_t offset = mp_decode_Xint(data);
+	int64_t offset = mp_decode_xint(data);
 	check_tz_offset(offset);
 	date->offset = offset;
 
@@ -146,11 +147,11 @@ mp_decode_datetime(const char **data, struct datetime *date)
 char *
 datetime_pack(char *data, const struct datetime *date)
 {
-	data = mp_encode_Xint(data, date->secs);
+	data = mp_encode_xint(data, date->secs);
 	if (date->nsec != 0 || date->offset != 0)
 		data = mp_encode_uint(data, date->nsec);
 	if (date->offset)
-		data = mp_encode_Xint(data, date->offset);
+		data = mp_encode_xint(data, date->offset);
 
 	return data;
 }
