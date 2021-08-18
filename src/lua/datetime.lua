@@ -16,51 +16,49 @@ local ffi = require('ffi')
 
 -- dt_core.h definitions
 ffi.cdef [[
-    typedef int dt_t;
 
-    dt_t     tnt_dt_from_rdn     (int n);
-    dt_t     tnt_dt_from_ymd     (int y, int m, int d);
+typedef int dt_t;
 
-    int      tnt_dt_rdn          (dt_t dt);
+dt_t   tnt_dt_from_rdn     (int n);
+dt_t   tnt_dt_from_ymd     (int y, int m, int d);
+int    tnt_dt_rdn          (dt_t dt);
+
 ]]
 
 -- dt_arithmetic.h definitions
 ffi.cdef [[
-    typedef enum {
-        DT_EXCESS,
-        DT_LIMIT,
-        DT_SNAP
-    } dt_adjust_t;
 
-    dt_t    tnt_dt_add_years        (dt_t dt, int delta, dt_adjust_t adjust);
-    dt_t    tnt_dt_add_quarters     (dt_t dt, int delta, dt_adjust_t adjust);
-    dt_t    tnt_dt_add_months       (dt_t dt, int delta, dt_adjust_t adjust);
+typedef enum {
+    DT_EXCESS,
+    DT_LIMIT,
+    DT_SNAP
+} dt_adjust_t;
+
+dt_t   tnt_dt_add_years    (dt_t dt, int delta, dt_adjust_t adjust);
+dt_t   tnt_dt_add_quarters (dt_t dt, int delta, dt_adjust_t adjust);
+dt_t   tnt_dt_add_months   (dt_t dt, int delta, dt_adjust_t adjust);
+
 ]]
 
 -- dt_parse_iso.h definitions
 ffi.cdef [[
-    size_t tnt_dt_parse_iso_date          (const char *str, size_t len, dt_t *dt);
-    size_t tnt_dt_parse_iso_time          (const char *str, size_t len, int *sod, int *nsec);
-    size_t tnt_dt_parse_iso_zone_lenient  (const char *str, size_t len, int *offset);
+
+size_t tnt_dt_parse_iso_date (const char *str, size_t len, dt_t *dt);
+size_t tnt_dt_parse_iso_time (const char *str, size_t len, int *sod, int *nsec);
+size_t tnt_dt_parse_iso_zone_lenient(const char *str, size_t len, int *offset);
+
 ]]
 
 -- Tarantool functions - datetime.c
 ffi.cdef [[
-    int
-    datetime_to_string(const struct datetime * date, char *buf, int len);
 
-    char *
-    datetime_asctime(const struct datetime *date, char *buf);
+int    datetime_to_string(const struct datetime * date, char *buf, int len);
+char  *datetime_asctime(const struct datetime *date, char *buf);
+char  *datetime_ctime(const struct datetime *date, char *buf);
+size_t datetime_strftime(const struct datetime *date, const char *fmt, char *buf,
+                         uint32_t len);
+void   datetime_now(struct datetime *now);
 
-    char *
-    datetime_ctime(const struct datetime *date, char *buf);
-
-    size_t
-    datetime_strftime(const struct datetime *date, const char *fmt, char *buf,
-                      uint32_t len);
-
-    void
-    datetime_now(struct datetime * now);
 ]]
 
 local builtin = ffi.C
@@ -92,22 +90,17 @@ local interval_months_t = ffi.typeof('struct interval_months')
 local interval_years_t = ffi.typeof('struct interval_years')
 
 local function is_interval(o)
-    return type(o) == 'cdata' and
-           (ffi.istype(interval_t, o) or
-            ffi.istype(interval_months_t, o) or
-            ffi.istype(interval_years_t, o))
+    return ffi.istype(interval_t, o) or
+           ffi.istype(interval_months_t, o) or
+           ffi.istype(interval_years_t, o)
 end
 
 local function is_datetime(o)
-    return type(o) == 'cdata' and ffi.istype(datetime_t, o)
+    return ffi.istype(datetime_t, o)
 end
 
 local function is_date_interval(o)
-    return type(o) == 'cdata' and
-           (ffi.istype(datetime_t, o) or
-            ffi.istype(interval_t, o) or
-            ffi.istype(interval_months_t, o) or
-            ffi.istype(interval_years_t, o))
+    return is_datetime(o) or is_interval(o)
 end
 
 local function interval_new()
@@ -230,9 +223,8 @@ local function normalize_nsec(secs, nsec)
 end
 
 local function datetime_cmp(lhs, rhs)
-    if not is_date_interval(lhs) or
-       not is_date_interval(rhs) then
-       return nil
+    if not is_date_interval(lhs) or not is_date_interval(rhs) then
+        return nil
     end
     local sdiff = lhs.secs - rhs.secs
     return sdiff ~= 0 and sdiff or (lhs.nsec - rhs.nsec)
@@ -271,12 +263,12 @@ local function datetime_new_raw(secs, nsec, offset)
     return dt_obj
 end
 
-local function datetime_new_dt(dt, secs, frac, offset)
+local function datetime_new_dt(dt, secs, fraction, offset)
     local epochV = dt ~= nil and (builtin.tnt_dt_rdn(dt) - DT_EPOCH_1970_OFFSET) *
                    SECS_PER_DAY or 0
-    local secsV = secs ~= nil and secs or 0
-    local fracV = frac ~= nil and frac or 0
-    local ofsV = offset ~= nil and offset or 0
+    local secsV = secs or 0
+    local fracV = fraction or 0
+    local ofsV = offset or 0
     return datetime_new_raw(epochV + secsV - ofsV * 60, fracV, ofsV)
 end
 
@@ -319,7 +311,7 @@ local function datetime_new(obj)
     local h = 0
     local m = 0
     local s = 0
-    local frac = 0
+    local nsec = 0
     local hms = false
     local offset = 0
 
@@ -348,14 +340,15 @@ local function datetime_new(obj)
             hms = true
         elseif key == 'sec' or key == 'second' then
             check_range(value, {0, 60}, key)
-            s, frac = math_modf(value)
-            frac = frac * 1e9 -- convert fraction to nanoseconds
+            s, nsec = math_modf(value)
+            nsec = nsec * 1e9 -- convert fraction to nanoseconds
             hms = true
         elseif key == 'tz' then
-        -- tz offset in minutes
+            -- tz offset in minutes
             check_range(value, {0, 720}, key)
             offset = value
-        elseif key == 'isdst' or key == 'wday' or key =='yday' then -- luacheck: ignore 542
+        elseif key == 'isdst' or key == 'wday' or
+               key == 'yday' then -- luacheck: ignore 542
             -- ignore unused os.date attributes
         else
             error(('unknown attribute %s'):format(key), 2)
@@ -373,9 +366,16 @@ local function datetime_new(obj)
         secs = h * 3600 + m * 60 + s
     end
 
-    return datetime_new_dt(dt, secs, frac, offset)
+    return datetime_new_dt(dt, secs, nsec, offset)
 end
 
+--[[
+    Convert to text datetime values
+
+    - datetime will use ISO-8601 forat:
+        1970-01-01T00:00Z
+        2021-08-18T16:57:08.981725+03:00
+]]
 local function datetime_tostring(o)
     if ffi.typeof(o) == datetime_t then
         local sz = 48
@@ -383,7 +383,25 @@ local function datetime_tostring(o)
         local len = builtin.datetime_to_string(o, buff, sz)
         assert(len < sz)
         return ffi.string(buff)
-    elseif ffi.typeof(o) == interval_years_t then
+    end
+end
+
+--[[
+    Convert to text interval values of different types
+
+    - depending on a values stored there generic interval
+      values may display in following format:
+        +12 secs
+        -23 minutes, 0 seconds
+        +12 hours, 23 minutes, 1 seconds
+        -7 days, 23 hours, 23 minutes, 1 seconds
+    - years will be displayed as
+        +10 years
+    - months will be displayed as:
+         +2 months
+]]
+local function interval_tostring(o)
+    if ffi.typeof(o) == interval_years_t then
         return ('%+d years'):format(o.y)
     elseif ffi.typeof(o) == interval_months_t then
         return ('%+d months'):format(o.m)
@@ -537,6 +555,9 @@ end
     2012359    2012-359     Ordinal date    (ISO 8601)
     2012W521   2012-W52-1   Week date       (ISO 8601)
     2012Q485   2012-Q4-85   Quarter date
+
+    Returns pair of constructed datetime object, and length of string
+    which has been accepted by parser.
 ]]
 
 local function parse_date(str)
@@ -555,6 +576,9 @@ end
     T123045,123456789   T12:30:45,123456789
 
     The time designator [T] may be omitted.
+
+    Returns pair of constructed datetime object, and length of string
+    which has been accepted by parser.
 ]]
 local function parse_time(str)
     check_str("datetime.parse_time()")
@@ -572,6 +596,9 @@ end
     -hh      N/A
     +hhmm    +hh:mm
     -hhmm    -hh:mm
+
+    Returns pair of constructed datetime object, and length of string
+    which has been accepted by parser.
 ]]
 local function parse_zone(str)
     check_str("datetime.parse_zone()")
@@ -581,13 +608,14 @@ local function parse_zone(str)
            tonumber(len)
 end
 
-
 --[[
     aggregated parse functions
     assumes to deal with date T time time_zone
     at once
 
     date [T] time [ ] time_zone
+
+    Returns constructed datetime object.
 ]]
 local function parse(str)
     check_str("datetime.parse()")
@@ -601,7 +629,7 @@ local function parse(str)
 
     str = str:sub(tonumber(n) + 1)
 
-    local ch = str:sub(1,1)
+    local ch = str:sub(1, 1)
     if ch:match('[Tt ]') == nil then
         return datetime_new_dt(dt_)
     end
@@ -623,7 +651,7 @@ local function parse(str)
 
     str = str:sub(tonumber(n) + 1)
 
-    if str:sub(1,1) == ' ' then
+    if str:sub(1, 1) == ' ' then
         str = str:sub(2)
     end
 
@@ -637,6 +665,11 @@ local function parse(str)
     return datetime_new_dt(dt_, sp_, fp_, offset[0])
 end
 
+--[[
+    Dispatch function to create datetime from string or table.
+    Creates default timeobject (pointing to Epoch date) if
+    called without arguments.
+]]
 local function datetime_from(o)
     if o == nil or type(o) == 'table' then
         return datetime_new(o)
@@ -645,6 +678,10 @@ local function datetime_from(o)
     end
 end
 
+--[[
+    Create datetime object representing current time using microseconds
+    platform timer and local timezone information.
+]]
 local function local_now()
     local d = datetime_new_raw(0, 0, 0)
     builtin.datetime_now(d)
@@ -720,9 +757,14 @@ local function interval_increment(self, o, direction)
     return self
 end
 
--- Change the time-zone to the provided target_offset
--- Time `.secs`/`.nsec` are always UTC normalized, we need only to
--- reattribute object with different `.offset`
+--[[
+    Create new object with modified to target_offset time-zone.
+    If target timezone does not differ to the original one - we
+    return original object unmodified.
+
+    Time `.secs`/`.nsec` are always UTC normalized, we need only to
+    reattribute object with different `.offset`
+]]
 local function datetime_to_tz(self, tgt_ofs)
     if self.offset == tgt_ofs then
         return self
@@ -738,6 +780,29 @@ local function datetime_to_tz(self, tgt_ofs)
     return datetime_new_raw(self.secs, self.nsec, tgt_ofs)
 end
 
+--[[
+    Provide a set of accessor to datetime attributes:
+    - .epoch or .unixtime - return timestamp as seconds represented as double
+      typed value, and measured since Epoch;
+    - .ts or .timestamp - the same timestamp, but with extended precision and
+      fraction part;
+
+    All accessors below convert time distance from Epoch date to different
+    units:
+    - .ns or .nanoseconds - seconds and fraction converted to nanoseconds;
+    - .us or .microseconds - seconds and fraction converted to microseconds;
+    - .ms or .milliseconds - seconds and fraction converted to milliseconds;
+    - .s or .seconds - seconds with extended precision and fraction part;
+    - .m or .min or minutes - minutes with extended precision;
+    - .hr or .hours - hours with extended precision;
+    - .d or .days - days with extended precision;
+
+    .add or .sub methods provide friendlier way for interval arithmetics;
+
+    .to_utc and .to_tz allows to create equivalent datetime object but in
+    particular timezone or as UTC. Time moment remains the same, only time-zone
+    information changed, thus textual representation will be impacted also.
+]]
 local function datetime_index(self, key)
     if key == 'epoch' or key == 'unixtime' then
         return self.secs
@@ -778,6 +843,13 @@ local function datetime_index(self, key)
     end
 end
 
+--[[
+    Allow to change datetime attributes via:
+    - .epoch or .unixtime - change datetime via provided interval to Unix Epoch;
+    - .ts or .timestamp - change both seconds and nanoseconds fields via given
+    timestamp with extended precision. Timestamp fraction part changes
+    nanoseconds information.
+]]
 local function datetime_newindex(self, key, value)
     if key == 'epoch' or key == 'unixtime' then
         self.secs = value
@@ -794,17 +866,18 @@ end
 
 -- sizeof("Wed Jun 30 21:49:08 1993\n")
 local buf_len = 26
+local asctime_buffer = ffi.new('char[?]', buf_len)
 
 local function asctime(o)
     check_date(o, "datetime:asctime()")
-    local buf = ffi.new('char[?]', buf_len)
-    return ffi.string(builtin.datetime_asctime(o, buf))
+    return ffi.string(builtin.datetime_asctime(o, asctime_buffer))
 end
+
+local ctime_buffer = ffi.new('char[?]', buf_len)
 
 local function ctime(o)
     check_date(o, "datetime:ctime()")
-    local buf = ffi.new('char[?]', buf_len)
-    return ffi.string(builtin.datetime_ctime(o, buf))
+    return ffi.string(builtin.datetime_ctime(o, ctime_buffer))
 end
 
 local function strftime(fmt, o)
@@ -828,7 +901,7 @@ local datetime_mt = {
 }
 
 local interval_mt = {
-    __tostring = datetime_tostring,
+    __tostring = interval_tostring,
     __serialize = interval_serialize,
     __eq = datetime_eq,
     __lt = datetime_lt,
@@ -839,7 +912,7 @@ local interval_mt = {
 }
 
 local interval_tiny_mt = {
-    __tostring = datetime_tostring,
+    __tostring = interval_tostring,
     __serialize = interval_serialize,
     __sub = datetime_sub,
     __add = datetime_add,
@@ -862,14 +935,11 @@ return setmetatable(
         hours       = interval_hours_new,
         minutes     = interval_minutes_new,
         seconds     = interval_seconds_new,
-        interval    = interval_new,
 
         parse       = parse,
         parse_date  = parse_date,
         parse_time  = parse_time,
         parse_zone  = parse_zone,
-
-        tostring    = datetime_tostring,
 
         now         = local_now,
         strftime    = strftime,
