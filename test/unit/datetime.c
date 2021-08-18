@@ -9,12 +9,13 @@
 #include "mp_datetime.h"
 #include "msgpuck.h"
 #include "mp_extension_types.h"
+#include "trivia/util.h"
 
 static const char sample[] = "2012-12-24T15:30Z";
 
 #define S(s) {s, sizeof(s) - 1}
 struct {
-	const char * sz;
+	const char *str;
 	size_t len;
 } tests[] = {
 	S("2012-12-24 15:30Z"),
@@ -91,17 +92,14 @@ struct {
 };
 #undef S
 
-#define DIM(a) (sizeof(a) / sizeof(a[0]))
-
-/* p5-time-moment/src/moment_parse.c: parse_string_lenient() */
 static int
-parse_datetime(const char *str, size_t len, int64_t *sp, int32_t *np,
-	       int32_t *op)
+parse_datetime(const char *str, size_t len, int64_t *secs_p,
+	       int32_t *nanosecs_p, int32_t *offset_p)
 {
 	size_t n;
 	dt_t dt;
 	char c;
-	int sod = 0, nanosecond = 0, offset = 0;
+	int sec_of_day = 0, nanosecond = 0, offset = 0;
 
 	n = dt_parse_iso_date(str, len, &dt);
 	if (!n)
@@ -116,14 +114,14 @@ parse_datetime(const char *str, size_t len, int64_t *sp, int32_t *np,
 	str += n;
 	len -= n;
 
-	n = dt_parse_iso_time(str, len, &sod, &nanosecond);
+	n = dt_parse_iso_time(str, len, &sec_of_day, &nanosecond);
 	if (!n)
 		return 1;
 	if (n == len)
 		goto exit;
 
 	if (str[n] == ' ')
-	n++;
+		n++;
 
 	str += n;
 	len -= n;
@@ -133,9 +131,10 @@ parse_datetime(const char *str, size_t len, int64_t *sp, int32_t *np,
 		return 1;
 
 exit:
-	*sp = ((int64_t)dt_rdn(dt) - 719163) * 86400 + sod - offset * 60;
-	*np = nanosecond;
-	*op = offset;
+	*secs_p = ((int64_t)dt_rdn(dt) - DT_EPOCH_1970_OFFSET) * SECS_PER_DAY +
+		  sec_of_day - offset * 60;
+	*nanosecs_p = nanosecond;
+	*offset_p = offset;
 
 	return 0;
 }
@@ -173,29 +172,30 @@ static void datetime_test(void)
 	size_t index;
 	int64_t secs_expected;
 	int32_t nanosecs;
-	int32_t ofs;
+	int32_t offset;
 
 	plan(355);
 	parse_datetime(sample, sizeof(sample) - 1,
-		       &secs_expected, &nanosecs, &ofs);
+		       &secs_expected, &nanosecs, &offset);
 
-	for (index = 0; index < DIM(tests); index++) {
+	for (index = 0; index < lengthof(tests); index++) {
 		int64_t secs;
-		int rc = parse_datetime(tests[index].sz, tests[index].len,
-					&secs, &nanosecs, &ofs);
+		int rc = parse_datetime(tests[index].str, tests[index].len,
+					&secs, &nanosecs, &offset);
 		is(rc, 0, "correct parse_datetime return value for '%s'",
-		   tests[index].sz);
+		   tests[index].str);
 		is(secs, secs_expected, "correct parse_datetime output "
-		   "seconds for '%s", tests[index].sz);
+					"seconds for '%s",
+		   tests[index].str);
 
 		/*
 		 * check that stringized literal produces the same date
 		 * time fields
 		 */
 		static char buff[40];
-		struct datetime dt = {secs, nanosecs, ofs};
+		struct datetime dt = {secs, nanosecs, offset};
 		/* datetime_to_tm returns time in GMT zone */
-		struct tm * p_tm = datetime_to_tm(&dt);
+		struct tm *p_tm = datetime_to_tm(&dt);
 		size_t len = strftime(buff, sizeof buff, "%F %T", p_tm);
 		ok(len > 0, "strftime");
 		int64_t parsed_secs;
@@ -237,7 +237,7 @@ tostring_datetime_test(void)
 	size_t index;
 
 	plan(15);
-	for (index = 0; index < DIM(tests); index++) {
+	for (index = 0; index < lengthof(tests); index++) {
 		struct datetime date = {
 			tests[index].secs,
 			tests[index].nsec,
@@ -282,7 +282,7 @@ mp_datetime_test()
 	size_t index;
 
 	plan(85);
-	for (index = 0; index < DIM(tests); index++) {
+	for (index = 0; index < lengthof(tests); index++) {
 		struct datetime date = {
 			tests[index].secs,
 			tests[index].nsec,
