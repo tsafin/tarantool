@@ -111,9 +111,25 @@ datetime_to_string(const struct datetime *date, char *buf, int len);
 char *
 datetime_asctime(const struct datetime *date, char *buf);
 
+/**
+ * Convert datetime to string using default ctime format, using
+ * local timezone for representation.
+ * "Sun Sep 16 01:03:52 1973\n\0"
+ * Wrapper around reenterable ctime_r() version of POSIX function
+ * @param date source datetime value
+ * @sa datetime_asctime
+ */
 char *
 datetime_ctime(const struct datetime *date, char *buf);
 
+/**
+ * Convert datetime to string using default format provided
+ * Wrapper around standard strftime() function
+ * @param date source datetime value
+ * @param fmt format
+ * @param buf output buffer
+ * @param len size of output buffer
+ */
 size_t
 datetime_strftime(const struct datetime *date, const char *fmt, char *buf,
 		  uint32_t len);

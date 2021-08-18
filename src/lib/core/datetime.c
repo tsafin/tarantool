@@ -12,6 +12,11 @@
 #include "trivia/util.h"
 #include "datetime.h"
 
+/*
+ * Given the seconds from Epoch (1970-01-01) we calculate date
+ * since Rata Die (0001-01-01).
+ * DT_EPOCH_1970_OFFSET is the distance in days from Rata Die to Epoch.
+ */
 static int
 local_dt(int64_t secs)
 {
