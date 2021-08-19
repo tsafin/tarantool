@@ -271,7 +271,7 @@ local function datetime_new(obj)
 
     -- .year, .month, .day
     if ymd then
-        dt = builtin.tnt_dt_from_ymd(y or 0, M or 0, d or 0)
+        dt = builtin.tnt_dt_from_ymd(y or 0, M or 1, d or 1)
     end
 
     -- .hour, .minute, .second
@@ -542,6 +542,22 @@ ffi.metatype(datetime_t, {
         microseconds = function(self) return self.secs * 1e6 + self.nsec / 1e3 end,
         milliseconds = function(self) return self.secs * 1e3 + self.nsec / 1e6 end,
         seconds = function(self) return self.secs + self.nsec / 1e9 end,
+        secs = function(self) return self.secs end,
+
+        dt = function(self) return local_dt(self.secs) end,
+        year = function(self) return builtin.dt_year(local_dt(self.secs)) end,
+        month = function(self) return builtin.dt_month(local_dt(self.secs)) end,
+        yday = function(self) return builtin.dt_doy(local_dt(self.secs)) end,
+        wday = function(self)
+            return ffi.cast('int32_t', builtin.tnt_dt_dow(local_dt(self.secs)))
+        end,
+        day_of_month = function(self)
+            return builtin.dt_dom(local_dt(self.secs))
+        end,
+        hour = function(self) return math_floor((self.secs / 3600) % 24) end,
+        minute = function(self) return math_floor((self.secs / 60) % 60) end,
+        second = function(self) return self.secs % 60 end,
+
         add = function(self, obj) return datetime_increment(self, obj, 1) end,
         sub = function(self, obj) return datetime_increment(self, obj, -1) end,
         totable = datetime_totable,
