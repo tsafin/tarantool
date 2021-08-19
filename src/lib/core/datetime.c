@@ -93,20 +93,17 @@ datetime_to_string(const struct datetime *date, char *buf, int len)
 	nanosec = date->nsec;
 
 	int sz = 0;
-	SNPRINT(sz, snprintf, buf, len, "%04d-%02d-%02dT%02d:%02d",
-		year, month, day, hour, minute);
-	if (second || nanosec) {
-		SNPRINT(sz, snprintf, buf, len, ":%02d", second);
-		if (nanosec) {
-			if ((nanosec % 1000000) == 0)
-				SNPRINT(sz, snprintf, buf, len, ".%03d",
-					nanosec / 1000000);
-			else if ((nanosec % 1000) == 0)
-				SNPRINT(sz, snprintf, buf, len, ".%06d",
-					nanosec / 1000);
-			else
-				SNPRINT(sz, snprintf, buf, len, ".%09d", nanosec);
-		}
+	SNPRINT(sz, snprintf, buf, len, "%04d-%02d-%02dT%02d:%02d:%02d",
+		year, month, day, hour, minute, second);
+	if (nanosec != 0) {
+		if ((nanosec % 1000000) == 0)
+			SNPRINT(sz, snprintf, buf, len, ".%03d",
+				nanosec / 1000000);
+		else if ((nanosec % 1000) == 0)
+			SNPRINT(sz, snprintf, buf, len, ".%06d",
+				nanosec / 1000);
+		else
+			SNPRINT(sz, snprintf, buf, len, ".%09d", nanosec);
 	}
 	if (offset == 0) {
 		SNPRINT(sz, snprintf, buf, len, "Z");
