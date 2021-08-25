@@ -142,7 +142,7 @@ exit:
 static int
 local_rd(const struct datetime *dt)
 {
-	return (int)((int64_t)dt->secs / SECS_PER_DAY) + DT_EPOCH_1970_OFFSET;
+	return (int)(dt->epoch / SECS_PER_DAY) + DT_EPOCH_1970_OFFSET;
 }
 
 static int
@@ -159,7 +159,7 @@ datetime_to_tm(struct datetime *dt)
 	memset(&tm, 0, sizeof(tm));
 	dt_to_struct_tm(local_dt(dt), &tm);
 
-	int seconds_of_day = (int64_t)dt->secs % 86400;
+	int seconds_of_day = dt->epoch % 86400;
 	tm.tm_hour = (seconds_of_day / 3600) % 24;
 	tm.tm_min = (seconds_of_day / 60) % 60;
 	tm.tm_sec = seconds_of_day % 60;
@@ -193,7 +193,7 @@ static void datetime_test(void)
 		 * time fields
 		 */
 		static char buff[40];
-		struct datetime dt = {secs, nanosecs, offset};
+		struct datetime dt = {secs, nanosecs, offset, 0};
 		/* datetime_to_tm returns time in GMT zone */
 		struct tm *p_tm = datetime_to_tm(&dt);
 		size_t len = strftime(buff, sizeof(buff), "%F %T", p_tm);
@@ -241,7 +241,8 @@ tostring_datetime_test(void)
 		struct datetime date = {
 			tests[index].secs,
 			tests[index].nsec,
-			tests[index].offset
+			tests[index].offset,
+			0
 		};
 		char buf[48];
 		datetime_to_string(&date, buf, sizeof(buf));
@@ -286,7 +287,8 @@ mp_datetime_test()
 		struct datetime date = {
 			tests[index].secs,
 			tests[index].nsec,
-			tests[index].offset
+			tests[index].offset,
+			0
 		};
 		char buf[24], *data = buf;
 		const char *data1 = buf;
@@ -343,7 +345,7 @@ mp_print_test(void)
 	char sample[64];
 	char buffer[64];
 	char str[64];
-	struct datetime date = {0, 0, 0}; // 1970-01-01T00:00Z
+	struct datetime date = { .epoch = 0 }; // 1970-01-01T00:00Z
 
 	mp_encode_datetime(buffer, &date);
 	int sz = datetime_to_string(&date, str, sizeof(str));
