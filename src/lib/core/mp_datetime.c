@@ -46,20 +46,24 @@
 static inline uint32_t
 mp_sizeof_datetime_raw(const struct datetime *date)
 {
-	check_secs(date->secs);
-	uint32_t sz = mp_sizeof_xint(date->secs);
+	check_secs(date->epoch);
+	uint32_t sz = mp_sizeof_xint(date->epoch);
 
 	/*
 	 * even if nanosecs == 0 we need to output something
 	 * if we have a non-null tz offset
 	 */
-	if (date->nsec != 0 || date->offset != 0) {
+	if (date->nsec != 0 || date->tzoffset != 0 || date->tzindex != 0) {
 		check_nanosecs(date->nsec);
 		sz += mp_sizeof_xint(date->nsec);
 	}
-	if (date->offset != 0) {
-		check_tz_offset(date->offset);
-		sz += mp_sizeof_xint(date->offset);
+	if (date->tzoffset != 0 || date->tzindex) {
+		check_tz_offset(date->tzoffset);
+		sz += mp_sizeof_xint(date->tzoffset);
+	}
+	if (date->tzindex) {
+		check_tz_offset(date->tzindex);
+		sz += mp_sizeof_xint(date->tzindex);
 	}
 	return sz;
 }
@@ -79,7 +83,7 @@ datetime_unpack(const char **data, uint32_t len, struct datetime *date)
 
 	int64_t seconds = mp_decode_xint(data);
 	check_secs(seconds);
-	date->secs = seconds;
+	date->epoch = seconds;
 
 	len -= *data - svp;
 	if (len <= 0)
@@ -94,9 +98,16 @@ datetime_unpack(const char **data, uint32_t len, struct datetime *date)
 	if (len <= 0)
 		return date;
 
-	int64_t offset = mp_decode_xint(data);
-	check_tz_offset(offset);
-	date->offset = offset;
+	int64_t tzoffset = mp_decode_xint(data);
+	check_tz_offset(tzoffset);
+	date->tzoffset = tzoffset;
+
+	if (len <= 0)
+		return date;
+
+	int64_t tzindex = mp_decode_xint(data);
+	// FIXME - check_tzindex
+	date->tzoffset = tzindex;
 
 	return date;
 }
@@ -121,11 +132,13 @@ mp_decode_datetime(const char **data, struct datetime *date)
 char *
 datetime_pack(char *data, const struct datetime *date)
 {
-	data = mp_encode_xint(data, date->secs);
-	if (date->nsec != 0 || date->offset != 0)
+	data = mp_encode_xint(data, date->epoch);
+	if (date->nsec != 0 || date->tzoffset != 0 || date->tzindex != 0)
 		data = mp_encode_uint(data, date->nsec);
-	if (date->offset)
-		data = mp_encode_xint(data, date->offset);
+	if (date->tzoffset != 0 || date->tzindex != 0)
+		data = mp_encode_xint(data, date->tzoffset);
+	if (date->tzindex != 0)
+		data = mp_encode_xint(data, date->tzindex);
 
 	return data;
 }
@@ -143,9 +156,7 @@ mp_encode_datetime(char *data, const struct datetime *date)
 int
 mp_snprint_datetime(char *buf, int size, const char **data, uint32_t len)
 {
-	struct datetime date = {
-		.secs = 0, .nsec = 0, .offset = 0
-	};
+	struct datetime date = { .epoch = 0 };
 
 	if (datetime_unpack(data, len, &date) == NULL)
 		return -1;
@@ -156,9 +167,7 @@ mp_snprint_datetime(char *buf, int size, const char **data, uint32_t len)
 int
 mp_fprint_datetime(FILE *file, const char **data, uint32_t len)
 {
-	struct datetime date = {
-		.secs = 0, .nsec = 0, .offset = 0
-	};
+	struct datetime date = { .epoch = 0 };
 
 	if (datetime_unpack(data, len, &date) == NULL)
 		return -1;
