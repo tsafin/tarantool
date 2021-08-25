@@ -734,9 +734,10 @@ tarantool_lua_utils_init(struct lua_State *L)
 	assert(CTID_UUID != 0);
 
 	rc = luaL_cdef(L, "struct datetime {"
-			  "double secs;"
+			  "int64_t epoch;"
 			  "int32_t nsec;"
-			  "int32_t offset;"
+			  "int16_t tzoffset;"
+			  "int16_t tzindex;"
 			  "};");
 	assert(rc == 0);
 	(void) rc;

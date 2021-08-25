@@ -59,11 +59,13 @@ extern "C"
  */
 struct datetime {
 	/** Seconds since Epoch. */
-	double secs;
+	int64_t epoch;
 	/** Nanoseconds, if any. */
-	uint32_t nsec;
+	int32_t nsec;
 	/** Offset in minutes from UTC. */
-	int32_t offset;
+	int16_t tzoffset;
+	/** Olson timezone id */
+	int16_t tzindex;
 };
 
 /**

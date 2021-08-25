@@ -29,10 +29,10 @@ datetime_to_tm(const struct datetime *date)
 	static struct tm tm;
 
 	memset(&tm, 0, sizeof(tm));
-	int64_t secs = date->secs;
+	int64_t secs = date->epoch;
 	dt_to_struct_tm(local_dt(secs), &tm);
 
-	int seconds_of_day = (int64_t)date->secs % SECS_PER_DAY;
+	int seconds_of_day = date->epoch % SECS_PER_DAY;
 	tm.tm_hour = (seconds_of_day / 3600) % 24;
 	tm.tm_min = (seconds_of_day / 60) % 60;
 	tm.tm_sec = seconds_of_day % 60;
@@ -45,14 +45,14 @@ datetime_now(struct datetime *now)
 {
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
-	now->secs = tv.tv_sec;
+	now->epoch = tv.tv_sec;
 	now->nsec = tv.tv_usec * 1000;
 
 	time_t now_seconds;
 	time(&now_seconds);
 	struct tm tm;
 	localtime_r(&now_seconds, &tm);
-	now->offset = tm.tm_gmtoff / 60;
+	now->tzoffset = tm.tm_gmtoff / 60;
 }
 
 size_t
@@ -70,14 +70,14 @@ datetime_strftime(const struct datetime *date, const char *fmt, char *buf,
 int
 datetime_to_string(const struct datetime *date, char *buf, int len)
 {
-	int offset = date->offset;
+	int offset = date->tzoffset;
 	/* for negative offsets around Epoch date we could get
 	 * negative secs value, which should be attributed to
 	 * 1969-12-31, not 1970-01-01, thus we first shift
 	 * epoch to Rata Die then divide by seconds per day,
 	 * not in reverse
 	 */
-	int64_t rd_seconds = (int64_t)date->secs + offset * 60 +
+	int64_t rd_seconds = date->epoch + offset * 60 +
 			     SECS_EPOCH_1970_OFFSET;
 	int rd_number = rd_seconds / SECS_PER_DAY;
 	assert(rd_number <= INT_MAX);
@@ -123,7 +123,7 @@ datetime_to_string(const struct datetime *date, char *buf, int len)
 int
 datetime_compare(const struct datetime *lhs, const struct datetime *rhs)
 {
-	int result = COMPARE_RESULT(lhs->secs, rhs->secs);
+	int result = COMPARE_RESULT(lhs->epoch, rhs->epoch);
 	if (result != 0)
 		return result;
 
