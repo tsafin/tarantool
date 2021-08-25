@@ -1655,7 +1655,7 @@ hint_datetime(struct datetime *date)
 	 * seconds field as a hint value, and at MSB part
 	 * of HINT_VALUE_NSEC_BITS from nanoseconds.
 	 */
-	int64_t secs = date->secs;
+	int64_t secs = date->epoch;
 	int32_t nsec = date->nsec;
 	uint64_t val = secs <= HINT_VALUE_SECS_MIN ? 0 :
 			secs - HINT_VALUE_SECS_MIN;
