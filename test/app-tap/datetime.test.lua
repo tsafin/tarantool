@@ -20,16 +20,16 @@ test:test("Multiple tests for parser (with nanoseconds)", function(test)
     -- borrowed from p5-time-moments/t/180_from_string.t
     local tests =
     {
-        {'1970-01-01T00:00Z',                  0,         0,    0, 1},
-        {'1970-01-01T02:00+02:00',             0,         0,  120, 1},
-        {'1970-01-01T01:30+01:30',             0,         0,   90, 1},
-        {'1970-01-01T01:00+01:00',             0,         0,   60, 1},
-        {'1970-01-01T00:01+00:01',             0,         0,    1, 1},
-        {'1970-01-01T00:00Z',                  0,         0,    0, 1},
-        {'1969-12-31T23:59-00:01',             0,         0,   -1, 1},
-        {'1969-12-31T23:00-01:00',             0,         0,  -60, 1},
-        {'1969-12-31T22:30-01:30',             0,         0,  -90, 1},
-        {'1969-12-31T22:00-02:00',             0,         0, -120, 1},
+        {'1970-01-01T00:00:00Z',                  0,         0,    0, 1},
+        {'1970-01-01T02:00:00+02:00',             0,         0,  120, 1},
+        {'1970-01-01T01:30:00+01:30',             0,         0,   90, 1},
+        {'1970-01-01T01:00:00+01:00',             0,         0,   60, 1},
+        {'1970-01-01T00:01:00+00:01',             0,         0,    1, 1},
+        {'1970-01-01T00:00:00Z',                  0,         0,    0, 1},
+        {'1969-12-31T23:59:00-00:01',             0,         0,   -1, 1},
+        {'1969-12-31T23:00:00-01:00',             0,         0,  -60, 1},
+        {'1969-12-31T22:30:00-01:30',             0,         0,  -90, 1},
+        {'1969-12-31T22:00:00-02:00',             0,         0, -120, 1},
         {'1970-01-01T00:00:00.123456789Z',     0, 123456789,    0, 1},
         {'1970-01-01T00:00:00.12345678Z',      0, 123456780,    0, 0},
         {'1970-01-01T00:00:00.1234567Z',       0, 123456700,    0, 0},
@@ -78,12 +78,12 @@ test:test("Multiple tests for parser (with nanoseconds)", function(test)
         {'9999-12-31T23:59:59Z',    253402300799,         0,    0, 1},
     }
     for _, value in ipairs(tests) do
-        local str, epoch, nsec, offset, check
-        str, epoch, nsec, offset, check = unpack(value)
+        local str, epoch, nsec, tzoffset, check
+        str, epoch, nsec, tzoffset, check = unpack(value)
         local dt = date(str)
-        test:ok(dt.secs == epoch, ('%s: dt.secs == %d'):format(str, epoch))
+        test:ok(dt.epoch == epoch, ('%s: dt.epoch == %d'):format(str, epoch))
         test:ok(dt.nsec == nsec, ('%s: dt.nsec == %d'):format(str, nsec))
-        test:ok(dt.offset == offset, ('%s: dt.offset == %d'):format(str, offset))
+        test:ok(dt.tzoffset == tzoffset, ('%s: dt.tzoffset == %d'):format(str, tzoffset))
         if check > 0 then
             test:ok(str == tostring(dt), ('%s == tostring(%s)'):
                     format(str, tostring(dt)))
@@ -91,17 +91,13 @@ test:test("Multiple tests for parser (with nanoseconds)", function(test)
     end
 end)
 
-ffi.cdef [[
-    void tzset(void);
-]]
-
 test:test("Datetime string formatting", function(test)
     test:plan(5)
     local str = "1970-01-01"
     local t = date(str)
-    test:ok(t.secs == 0, ('%s: t.secs == %d'):format(str, tonumber(t.secs)))
+    test:ok(t.epoch == 0, ('%s: t.epoch == %d'):format(str, tonumber(t.epoch)))
     test:ok(t.nsec == 0, ('%s: t.nsec == %d'):format(str, t.nsec))
-    test:ok(t.offset == 0, ('%s: t.offset == %d'):format(str, t.offset))
+    test:ok(t.tzoffset == 0, ('%s: t.tzoffset == %d'):format(str, t.tzoffset))
     test:ok(date.strftime('%d/%m/%Y', t) == '01/01/1970', ('%s: strftime #1'):format(str))
     test:ok(date.strftime('%A %d. %B %Y', t) == 'Thursday 01. January 1970', ('%s: strftime #2'):format(str))
 end)
@@ -186,7 +182,7 @@ test:test("Parse tiny date into seconds and other parts", function(test)
     test:plan(7)
     local str = '19700101 00:00:30.528'
     local tiny = date(str)
-    test:ok(tiny.secs == 30, ("secs of '%s'"):format(str))
+    test:ok(tiny.epoch == 30, ("epoch of '%s'"):format(str))
     test:ok(tiny.nsec == 528000000, ("nsec of '%s'"):format(str))
     test:ok(tiny:nanoseconds() == 30528000000, "nanoseconds")
     test:ok(tiny:microseconds() == 30528000, "microseconds")
@@ -200,12 +196,12 @@ test:test("Time interval operations", function(test)
 
     -- check arithmetic with leap dates
     local T = date('1972-02-29')
-    test:ok(tostring(T:add{years = 1, months = 2}) == '1973-05-01T00:00Z',
+    test:ok(tostring(T:add{years = 1, months = 2}) == '1973-05-01T00:00:00Z',
             ('T:add{years=1,months=2}(%s)'):format(T))
 
     -- check average, not leap dates
     T = date('1970-01-08')
-    test:ok(tostring(T:add{years = 1, months = 2}) == '1971-03-08T00:00Z',
+    test:ok(tostring(T:add{years = 1, months = 2}) == '1971-03-08T00:00:00Z',
             ('T:add{years=1,months=2}(%s)'):format(T))
 
 end)
