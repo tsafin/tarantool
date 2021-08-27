@@ -13,10 +13,10 @@ box.space.T:insert{date('1970-01-03')}\
 box.space.T:insert{date('2000-01-01')}
 
 o = box.space.T:select{}
-assert(tostring(o[1][1]) == '1970-01-01T00:00Z')
-assert(tostring(o[2][1]) == '1970-01-02T00:00Z')
-assert(tostring(o[3][1]) == '1970-01-03T00:00Z')
-assert(tostring(o[4][1]) == '2000-01-01T00:00Z')
+assert(tostring(o[1][1]) == '1970-01-01T00:00:00Z')
+assert(tostring(o[2][1]) == '1970-01-02T00:00:00Z')
+assert(tostring(o[3][1]) == '1970-01-03T00:00:00Z')
+assert(tostring(o[4][1]) == '2000-01-01T00:00:00Z')
 
 for i = 1,16 do\
     box.space.T:insert{date.now()}\
