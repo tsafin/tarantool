@@ -130,6 +130,14 @@ local function check_range(v, range, txt)
     end
 end
 
+local function nyi(msg)
+    local text = 'Not yet implemented'
+    if msg ~= nil then
+        text = ("%s : '%s'"):format(text, msg)
+    end
+    error(text, 3)
+end
+
 local SECS_EPOCH_OFFSET = (DT_EPOCH_1970_OFFSET * SECS_PER_DAY)
 
 local function local_rd(secs)
@@ -278,6 +286,10 @@ local function datetime_new(obj)
                 offset = zone.tzoffset
             end
         end
+    end
+
+    if obj.tz ~= nil then
+        nyi('tz')
     end
 
     -- .year, .month, .day
