@@ -12,7 +12,7 @@ test:test("Simple tests for parser", function(test)
     test:ok(date("1970-01-01T01:00:00Z") ==
             date {year=1970, month=1, day=1, hour=1, minute=0, second=0})
     test:ok(date("1970-01-01T02:00:00+02:00") ==
-            date {year=1970, month=1, day=1, hour=2, minute=0, second=0, tz=120})
+            date {year=1970, month=1, day=1, hour=2, minute=0, second=0, tzoffset=120})
 end)
 
 test:test("Multiple tests for parser (with nanoseconds)", function(test)
@@ -20,16 +20,16 @@ test:test("Multiple tests for parser (with nanoseconds)", function(test)
     -- borrowed from p5-time-moments/t/180_from_string.t
     local tests =
     {
-        {'1970-01-01T00:00:00Z',                  0,         0,    0, 1},
-        {'1970-01-01T02:00:00+02:00',             0,         0,  120, 1},
-        {'1970-01-01T01:30:00+01:30',             0,         0,   90, 1},
-        {'1970-01-01T01:00:00+01:00',             0,         0,   60, 1},
-        {'1970-01-01T00:01:00+00:01',             0,         0,    1, 1},
-        {'1970-01-01T00:00:00Z',                  0,         0,    0, 1},
-        {'1969-12-31T23:59:00-00:01',             0,         0,   -1, 1},
-        {'1969-12-31T23:00:00-01:00',             0,         0,  -60, 1},
-        {'1969-12-31T22:30:00-01:30',             0,         0,  -90, 1},
-        {'1969-12-31T22:00:00-02:00',             0,         0, -120, 1},
+        {'1970-01-01T00:00:00Z',               0,         0,    0, 1},
+        {'1970-01-01T02:00:00+02:00',          0,         0,  120, 1},
+        {'1970-01-01T01:30:00+01:30',          0,         0,   90, 1},
+        {'1970-01-01T01:00:00+01:00',          0,         0,   60, 1},
+        {'1970-01-01T00:01:00+00:01',          0,         0,    1, 1},
+        {'1970-01-01T00:00:00Z',               0,         0,    0, 1},
+        {'1969-12-31T23:59:00-00:01',          0,         0,   -1, 1},
+        {'1969-12-31T23:00:00-01:00',          0,         0,  -60, 1},
+        {'1969-12-31T22:30:00-01:30',          0,         0,  -90, 1},
+        {'1969-12-31T22:00:00-02:00',          0,         0, -120, 1},
         {'1970-01-01T00:00:00.123456789Z',     0, 123456789,    0, 1},
         {'1970-01-01T00:00:00.12345678Z',      0, 123456780,    0, 0},
         {'1970-01-01T00:00:00.1234567Z',       0, 123456700,    0, 0},
@@ -92,7 +92,7 @@ test:test("Multiple tests for parser (with nanoseconds)", function(test)
 end)
 
 test:test("Datetime string formatting", function(test)
-    test:plan(5)
+    test:plan(6)
     local str = "1970-01-01"
     local t = date(str)
     test:ok(t.epoch == 0, ('%s: t.epoch == %d'):format(str, tonumber(t.epoch)))
@@ -100,6 +100,7 @@ test:test("Datetime string formatting", function(test)
     test:ok(t.tzoffset == 0, ('%s: t.tzoffset == %d'):format(str, t.tzoffset))
     test:ok(date.strftime('%d/%m/%Y', t) == '01/01/1970', ('%s: strftime #1'):format(str))
     test:ok(date.strftime('%A %d. %B %Y', t) == 'Thursday 01. January 1970', ('%s: strftime #2'):format(str))
+    test:ok(date.strftime('%FT%T%z', t) == '1970-01-01T00:00:00+0000', ('%s: strftime #3'):format(str))
 end)
 
 test:test("Parse iso date - valid strings", function(test)

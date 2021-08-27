@@ -248,15 +248,24 @@ local function datetime_new(obj)
         check_range(m, {0, 59}, 'min')
         hms = true
     end
-    local ts = obj.sec
-    local s = 0
+    local nsec, usec, msec = obj.nsec, obj.usec, obj.msec
+    -- if there are separate nsec, usec, or msec provided then 
+    -- timestamp should be integer
+    local int_ts = nsec ~= nil or usec ~= nil or msec ~= nil
+
+    local ts = obj.timestamp
+    local sec_int = 0
+    local fraction
     if ts ~= nil then
         check_range(ts, {0, 60}, 'sec')
-        s, nsec = math_modf(ts)
-        nsec = nsec * 1e9 -- convert fraction to nanoseconds
+        sec_int, fraction = math_modf(ts)
+        if not int_ts then
+            nsec = fraction * 1e9
+        end
         hms = true
     end
-    local offset = obj.tz
+
+    local offset = obj.tzoffset
     if offset ~= nil then
         if type(offset) == 'number' then
             -- tz offset in minutes
@@ -279,7 +288,7 @@ local function datetime_new(obj)
     -- .hour, .minute, .second
     local secs = 0
     if hms then
-        secs = (h or 0) * 3600 + (m or 0) * 60 + (s or 0)
+        secs = (h or 0) * 3600 + (m or 0) * 60 + (sec_int or 0)
     end
 
     return datetime_new_dt(dt, secs, nsec, offset)
