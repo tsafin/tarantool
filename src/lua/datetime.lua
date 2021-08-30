@@ -38,9 +38,19 @@ typedef enum {
 
 dt_t   tnt_dt_from_rdn     (int n);
 dt_t   tnt_dt_from_ymd     (int y, int m, int d);
-int    tnt_dt_rdn          (dt_t dt);
+void   tnt_dt_to_ymd       (dt_t dt, int *y, int *m, int *d);
+void   tnt_dt_to_yqd       (dt_t dt, int *y, int *q, int *d);
+void   tnt_dt_to_ywd       (dt_t dt, int *y, int *w, int *d);
 
+int    tnt_dt_rdn          (dt_t dt);
 dt_dow_t tnt_dt_dow        (dt_t dt);
+
+// dt_util.h
+bool    dt_leap_year       (int y);
+int     dt_days_in_year    (int y);
+int     dt_days_in_quarter (int y, int q);
+int     dt_days_in_month   (int y, int m);
+int     dt_weeks_in_year   (int y);
 
 ]]
 
@@ -115,6 +125,12 @@ local function check_date(o, message)
     end
 end
 
+local function check_table(o, message)
+    if type(o) ~= 'table' then
+        return error(("%s: expected table %s"):format(message, o), 2)
+    end
+end
+
 local function check_str(s, message)
     if not type(s) == 'string' then
         return error(("%s: expected string, but received %s"):
@@ -146,9 +162,13 @@ local function local_rd(secs)
     return math_floor((secs + SECS_EPOCH_OFFSET) / SECS_PER_DAY)
 end
 
--- convert UTC econds to local seconds, adjusting by timezone
+-- convert UTC seconds to local seconds, adjusting by timezone
 local function local_secs(obj)
     return tonumber(obj.epoch + obj.tzoffset * 60)
+end
+
+local function utc_secs(epoch, tzoffset)
+    return tonumber(epoch - tzoffset * 60)
 end
 
 -- get epoch seconds, shift to the local timezone
@@ -266,7 +286,7 @@ local function datetime_new(obj)
         hms = true
     end
     local nsec, usec, msec = obj.nsec, obj.usec, obj.msec
-    -- if there are separate nsec, usec, or msec provided then 
+    -- if there are separate nsec, usec, or msec provided then
     -- timestamp should be integer
     local int_ts = nsec ~= nil or usec ~= nil or msec ~= nil
 
@@ -541,8 +561,103 @@ local function datetime_totable(self)
     }
 end
 
+local function datetime_update_dt(self, dt)
+    local epoch = local_secs(self)
+    local secs_day = epoch % SECS_PER_DAY
+    epoch = (builtin.tnt_dt_rdn(dt) - DT_EPOCH_1970_OFFSET) * SECS_PER_DAY + secs_day
+    self.epoch = utc_secs(epoch, self.tzoffset)
+end
+
+local function datetime_ymd_update(self, y, M, d)
+    if d > 28 then
+        local day_in_month = 31 -- builtin.dt_days_in_month(y, M)
+        if d > day_in_month then
+            error(('invalid number of days %d in month %d for %d'):
+                  format(d, M, y), 3)
+        end
+    end
+    local dt = builtin.tnt_dt_from_ymd(y or 0, M or 1, d or 1)
+    datetime_update_dt(self, dt)
+end
+
+local function bool2int(b)
+    return b and 1 or 0
+end
+
 local function datetime_set(self, obj)
-    -- FIXME
+    check_table(obj, "datetime.set()")
+
+    local ymd = false
+    local hms = false
+
+    local y = obj.year
+    if y ~= nil then
+        check_range(y, {1, 9999}, 'year')
+        ymd = true
+    end
+    local M = obj.month
+    if M ~= nil then
+        check_range(M, {1, 12}, 'month')
+        ymd = true
+    end
+    local d = obj.day
+    if d ~= nil then
+        check_range(d, {1, 31}, 'day')
+        ymd = true
+    end
+    local h = obj.hour
+    if h ~= nil then
+        check_range(h, {0, 23}, 'hour')
+        hms = true
+    end
+    local m = obj.min
+    if m ~= nil then
+        check_range(m, {0, 59}, 'min')
+        hms = true
+    end
+    local nsec, usec, msec = obj.nsec, obj.usec, obj.msec
+
+    if (bool2int(nsec ~= nil) + bool2int(usec ~= nil) + 
+        bool2int(msec ~= nil)) > 1 then
+        error('only one of nsec, usec or msecs may defined simultaneously', 2)
+    end
+
+    local sec_of_min = obj.sec
+    if sec_of_min ~= nil then
+        check_range(sec_of_min, {0, 60}, 'sec')
+        hms = true
+    end
+
+    local offset = obj.tzoffset
+    if offset ~= nil then
+        if type(offset) == 'number' then
+            -- tz offset in minutes
+            check_range(offset, {0, 720}, offset)
+        elseif type(offset) == 'string' then
+            local zone = parse_zone(offset)
+            if zone == nil then
+                error(('invalid time-zone format %s'):format(offset), 2)
+            else
+                offset = zone.tzoffset
+            end
+        end
+    end
+
+    if obj.tz ~= nil then
+        nyi('tz')
+    end
+
+    -- .year, .month, .day
+    if ymd then
+        datetime_ymd_update(self, y or 0, M or 1, d or 1)
+    end
+
+    -- .hour, .minute, .second
+    local secs = 0
+    if hms then
+        secs = (h or 0) * 3600 + (m or 0) * 60 + (sec_int or 0)
+    end
+
     return datetime_new(obj)
 end
 
