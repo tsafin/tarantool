@@ -138,14 +138,25 @@ local function nyi(msg)
     error(text, 3)
 end
 
+-- offset if __seconds__ of 1970-01-01 from 0000-01-01
 local SECS_EPOCH_OFFSET = (DT_EPOCH_1970_OFFSET * SECS_PER_DAY)
 
+-- convert from epoch related time to Rata Die related
 local function local_rd(secs)
     return math_floor((secs + SECS_EPOCH_OFFSET) / SECS_PER_DAY)
 end
 
-local function local_dt(secs)
-    return builtin.tnt_dt_from_rdn(local_rd(tonumber(secs)))
+-- convert UTC econds to local seconds, adjusting by timezone
+local function local_secs(obj)
+    return tonumber(obj.epoch + obj.tzoffset * 60)
+end
+
+-- get epoch seconds, shift to the local timezone
+-- adjust from 1970-related to 0000-related time
+-- then return dt in those coordinates (number of days
+-- since Rata Die date)
+local function local_dt(obj)
+    return builtin.tnt_dt_from_rdn(local_rd(local_secs(obj)))
 end
 
 local function normalize_nsec(secs, nsec)
@@ -224,11 +235,9 @@ local function datetime_new(obj)
     if obj == nil or type(obj) ~= 'table' then
         return datetime_new_raw(0, 0, 0)
     end
+
     local ymd = false
-
-    local nsec = 0
     local hms = false
-
     local dt = 0
 
     local y = obj.year
@@ -458,7 +467,7 @@ local function datetime_increment(self, o, direction)
 
     -- operations with intervals should be done using human dates
     -- not UTC dates, thus we normalize to UTC
-    local dt = local_dt(secs)
+    local dt = local_dt(self)
 
     local ym_updated = false
     local years, months, weeks = o.years, o.months, o.weeks
@@ -513,29 +522,22 @@ end
     and nanoseconds
 ]]
 local function datetime_totable(self)
-    local secs = self.epoch
-    local dt = local_dt(secs)
-    local year = builtin.dt_year(dt)
-    local month = builtin.dt_month(dt)
-    local yday = builtin.dt_doy(dt)
-    local wday = ffi.cast('int32_t', builtin.tnt_dt_dow(dt))
-    local day_of_month = builtin.dt_dom(dt)
-    local hour = math_floor((secs / 3600) % 24)
-    local minute = math_floor((secs / 60) % 60)
-    local second = secs % 60
+    local secs = local_secs(self) -- hour:minute should be in local timezone
+    local dt = local_dt(self)
 
     return {
-        sec = second,
-        min = minute,
-        day = day_of_month,
-        isdst = false,
-        wday = wday,
-        yday = yday,
-        year = year,
-        month = month,
-        hour = hour,
+        year = builtin.dt_year(dt),
+        month = builtin.dt_month(dt),
+        yday = builtin.dt_doy(dt),
+        day = builtin.dt_dom(dt),
+        wday = ffi.cast('int32_t', builtin.tnt_dt_dow(dt)),
+        hour = math_floor((secs / 3600) % 24),
+        min = math_floor((secs / 60) % 60),
+        sec = secs % 60,
+        isdst = false, -- FIXME - after we introduced timezone/DST support
         nsec = self.nsec,
-        tz = self.tzoffset,
+        tzoffset = self.tzoffset,
+        -- tz = "MSK", -- FIXME - after we introduced timezone support
     }
 end
 
@@ -561,24 +563,24 @@ ffi.metatype(datetime_t, {
     __index = {
         epoch = function(self) return self.epoch end,
         timestamp = function(self) return self.epoch + self.nsec / 1e9 end,
-        nanoseconds = function(self) return self.epoch * 1e9 + self.nsec end,
-        microseconds = function(self) return self.epoch * 1e6 + self.nsec / 1e3 end,
-        milliseconds = function(self) return self.epoch * 1e3 + self.nsec / 1e6 end,
-        seconds = function(self) return self.epoch + self.nsec / 1e9 end,
-        secs = function(self) return self.epoch end,
 
-        dt = function(self) return local_dt(self.epoch) end,
-        year = function(self) return builtin.dt_year(local_dt(self.epoch)) end,
-        month = function(self) return builtin.dt_month(local_dt(self.epoch)) end,
-        yday = function(self) return builtin.dt_doy(local_dt(self.epoch)) end,
+        nsec = function(self) return self.nsec end,
+        usec = function(self) return self.nsec / 1e3 end,
+        msec = function(self) return self.nsec / 1e6 end,
+
+        dt = function(self) return local_dt(self) end,
+        year = function(self) return builtin.dt_year(local_dt(self)) end,
+        month = function(self) return builtin.dt_month(local_dt(self)) end,
+
+        yday = function(self) return builtin.dt_doy(local_dt(self)) end,
         wday = function(self)
-            return ffi.cast('int32_t', builtin.tnt_dt_dow(local_dt(self.epoch)))
+            return ffi.cast('int32_t', builtin.tnt_dt_dow(local_dt(self)))
         end,
-        day_of_month = function(self)
-            return builtin.dt_dom(local_dt(self.epoch))
+        day = function(self)
+            return builtin.dt_dom(local_dt(self))
         end,
-        hour = function(self) return math_floor((self.epoch / 3600) % 24) end,
-        minute = function(self) return math_floor((self.epoch / 60) % 60) end,
+        hour = function(self) return math_floor((local_secs(self) / 3600) % 24) end,
+        minute = function(self) return math_floor((local_secs(self) / 60) % 60) end,
         second = function(self) return self.epoch % 60 end,
 
         add = function(self, obj) return datetime_increment(self, obj, 1) end,
