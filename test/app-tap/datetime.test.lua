@@ -5,7 +5,7 @@ local test = tap.test("errno")
 local date = require('datetime')
 local ffi = require('ffi')
 
-test:plan(7)
+test:plan(8)
 
 test:test("Simple tests for parser", function(test)
     test:plan(2)
@@ -180,15 +180,12 @@ test:test("Parse iso date - invalid strings", function(test)
 end)
 
 test:test("Parse tiny date into seconds and other parts", function(test)
-    test:plan(7)
+    test:plan(4)
     local str = '19700101 00:00:30.528'
     local tiny = date(str)
     test:ok(tiny.epoch == 30, ("epoch of '%s'"):format(str))
     test:ok(tiny.nsec == 528000000, ("nsec of '%s'"):format(str))
-    test:ok(tiny:nanoseconds() == 30528000000, "nanoseconds")
-    test:ok(tiny:microseconds() == 30528000, "microseconds")
-    test:ok(tiny:milliseconds() == 30528, "milliseconds")
-    test:ok(tiny:seconds() == 30.528, "seconds")
+    test:ok(tiny:second() == 30, "second")
     test:ok(tiny:timestamp() == 30.528, "timestamp")
 end)
 
@@ -205,6 +202,21 @@ test:test("Time interval operations", function(test)
     test:ok(tostring(T:add{years = 1, months = 2}) == '1971-03-08T00:00:00Z',
             ('T:add{years=1,months=2}(%s)'):format(T))
 
+end)
+
+test:test("Time :set{} operations", function(test)
+    test:plan(8)
+
+    T = date.new{ year = 2021, month = 8, day = 31,
+                  hour = 0, min = 31, sec = 11, tzoffset = '+0300'}
+    test:ok(tostring(T) == '2021-08-31T00:31:00+03:00', 'initial')
+    test:ok(tostring(T:set{ year = 2020 }) == '2020-08-31T00:31:00+03:00', '2020 year')
+    test:ok(tostring(T:set{ month = 11, day = 30 }) == '2020-11-30T00:31:00+03:00', 'month = 11, day = 30')
+    test:ok(tostring(T:set{ day = 9 }) == '2020-11-09T00:31:00+03:00', 'day 9')
+    test:ok(tostring(T:set{ hour = 6 }) ==  '2020-11-09T06:31:00+03:00', 'hour 6')
+    test:ok(tostring(T:set{ min = 12, sec = 23 }) == '2020-11-09T04:29:53+03:00', 'min 12, sec 23')
+    test:ok(tostring(T:set{ tzoffset = -8*60 }) == '2020-11-08T17:29:53-08:00', 'offset -0800' )
+    test:ok(tostring(T:set{ tzoffset = '+0800' }) == '2020-11-09T09:29:53+08:00', 'offset +0800' )
 end)
 
 os.exit(test:check() and 0 or 1)
