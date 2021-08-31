@@ -249,6 +249,19 @@ local function datetime_new_obj(obj, ...)
     end
 end
 
+local function get_timezone(offset)
+    if type(offset) == 'number' then
+        return offset
+    elseif type(offset) == 'string' then
+        local tzoffset = parse_zone(offset)
+        if tzoffset == nil then
+            error(('invalid time-zone format %s'):format(offset), 2)
+        else
+            return tzoffset
+        end
+    end
+end
+
 -- create datetime given attribute values from obj
 local function datetime_new(obj)
     if obj == nil or type(obj) ~= 'table' then
@@ -303,17 +316,8 @@ local function datetime_new(obj)
 
     local offset = obj.tzoffset
     if offset ~= nil then
-        if type(offset) == 'number' then
-            -- tz offset in minutes
-            check_range(offset, {0, 720}, offset)
-        elseif type(offset) == 'string' then
-            local tzoffset = parse_zone(offset)
-            if tzoffset == nil then
-                error(('invalid time-zone format %s'):format(offset), 2)
-            else
-                offset = tzoffset
-            end
-        end
+        offset = get_timezone(offset)
+        check_range(offset, {-720, 720}, offset)
     end
 
     if obj.tz ~= nil then
@@ -331,7 +335,7 @@ local function datetime_new(obj)
         secs = (h or 0) * 3600 + (m or 0) * 60 + (sec_int or 0)
     end
 
-    return datetime_new_dt(dt, secs, nsec, offset)
+    return datetime_new_dt(dt, secs, nsec, offset or 0)
 end
 
 --[[
@@ -579,6 +583,12 @@ local function datetime_ymd_update(self, y, M, d)
     datetime_update_dt(self, dt)
 end
 
+local function datetime_hms_update(self, h, m, s)
+    local epoch = local_secs(self)
+    local secs_day = epoch - (epoch % SECS_PER_DAY)
+    self.epoch = utc_secs(secs_day + h * 3600 + m * 60 + s, self.tzoffset)
+end
+
 local function bool2int(b)
     return b and 1 or 0
 end
@@ -611,6 +621,12 @@ local function datetime_set(self, obj)
         check_range(d, {1, 31}, 'day')
         ymd = true
     end
+
+    local lsecs = local_secs(self)
+    local h0 = lsecs / (24 * 60) % 24
+    local m0 = lsecs / 60 % 60
+    local sec0 = lsecs % 60
+
     local h = obj.hour
     if h ~= nil then
         check_range(h, {0, 23}, 'hour')
@@ -621,33 +637,24 @@ local function datetime_set(self, obj)
         check_range(m, {0, 59}, 'min')
         hms = true
     end
-    local nsec, usec, msec = obj.nsec, obj.usec, obj.msec
-
-    if (bool2int(nsec ~= nil) + bool2int(usec ~= nil) +
-        bool2int(msec ~= nil)) > 1 then
-        error('only one of nsec, usec or msecs may defined simultaneously', 2)
+    local sec = obj.sec
+    if sec ~= nil then
+        check_range(sec, {0, 60}, 'sec')
+        hms = true
     end
 
-    local sec_of_min = obj.sec
-    if sec_of_min ~= nil then
-        check_range(sec_of_min, {0, 60}, 'sec')
-        hms = true
+    local nsec, usec, msec = obj.nsec, obj.usec, obj.msec
+    local count_usec = bool2int(nsec ~= nil) + bool2int(usec ~= nil) +
+                       bool2int(msec ~= nil)
+    if count_usec > 1 then
+        error('only one of nsec, usec or msecs may defined simultaneously', 2)
     end
 
     local offset = obj.tzoffset
     if offset ~= nil then
-        if type(offset) == 'number' then
-            -- tz offset in minutes
-            check_range(offset, {0, 720}, offset)
-        elseif type(offset) == 'string' then
-            local zone = parse_zone(offset)
-            if zone == nil then
-                error(('invalid time-zone format %s'):format(offset), 2)
-            else
-                offset = zone.tzoffset
-            end
-        end
-        self.tzoffset = offset
+        offset = get_timezone(offset)
+        check_range(offset, {-720, 720}, offset)
+        -- self.tzoffset = offset
     end
 
     if obj.tz ~= nil then
@@ -660,9 +667,12 @@ local function datetime_set(self, obj)
     end
 
     -- .hour, .minute, .second
-    local secs = 0
     if hms then
-        secs = (h or 0) * 3600 + (m or 0) * 60 + (sec_of_min or 0)
+        datetime_hms_update(self, h or h0, m or m0, sec or sec0)
+    end
+
+    if offset ~= nil then
+        self.tzoffset = offset
     end
 
     return self
