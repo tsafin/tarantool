@@ -717,6 +717,7 @@ ffi.metatype(datetime_t, {
 
         add = function(self, obj) return datetime_increment(self, obj, 1) end,
         sub = function(self, obj) return datetime_increment(self, obj, -1) end,
+        format = datetime_tostring,
         totable = datetime_totable,
         set = datetime_set,
     }
