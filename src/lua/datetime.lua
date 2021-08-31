@@ -590,6 +590,13 @@ local function datetime_set(self, obj)
     local ymd = false
     local hms = false
 
+    local dt = local_dt(self)
+    local y0 = ffi.new('int[1]')
+    local M0 = ffi.new('int[1]')
+    local d0 = ffi.new('int[1]')
+    builtin.tnt_dt_to_ymd(dt, y0, M0, d0)
+    y0, M0, d0 = y0[0], M0[0], d0[0]
+
     local y = obj.year
     if y ~= nil then
         check_range(y, {1, 9999}, 'year')
@@ -617,7 +624,7 @@ local function datetime_set(self, obj)
     end
     local nsec, usec, msec = obj.nsec, obj.usec, obj.msec
 
-    if (bool2int(nsec ~= nil) + bool2int(usec ~= nil) + 
+    if (bool2int(nsec ~= nil) + bool2int(usec ~= nil) +
         bool2int(msec ~= nil)) > 1 then
         error('only one of nsec, usec or msecs may defined simultaneously', 2)
     end
@@ -641,6 +648,7 @@ local function datetime_set(self, obj)
                 offset = zone.tzoffset
             end
         end
+        self.tzoffset = offset
     end
 
     if obj.tz ~= nil then
@@ -649,16 +657,16 @@ local function datetime_set(self, obj)
 
     -- .year, .month, .day
     if ymd then
-        datetime_ymd_update(self, y or 0, M or 1, d or 1)
+        datetime_ymd_update(self, y or y0, M or M0, d or d0)
     end
 
     -- .hour, .minute, .second
     local secs = 0
     if hms then
-        secs = (h or 0) * 3600 + (m or 0) * 60 + (sec_int or 0)
+        secs = (h or 0) * 3600 + (m or 0) * 60 + (sec_of_min or 0)
     end
 
-    return datetime_new(obj)
+    return self
 end
 
 local function strftime(fmt, o)
