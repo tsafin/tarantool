@@ -46,22 +46,21 @@ int    tnt_dt_rdn          (dt_t dt);
 dt_dow_t tnt_dt_dow        (dt_t dt);
 
 // dt_util.h
-bool    dt_leap_year       (int y);
-int     dt_days_in_year    (int y);
-int     dt_days_in_quarter (int y, int q);
-int     dt_days_in_month   (int y, int m);
-int     dt_weeks_in_year   (int y);
+bool    tnt_dt_leap_year       (int y);
+int     tnt_dt_days_in_year    (int y);
+int     tnt_dt_days_in_quarter (int y, int q);
+int     tnt_dt_days_in_month   (int y, int m);
+int     tnt_dt_weeks_in_year   (int y);
 
 ]]
 
 -- dt_accessor.h
 ffi.cdef [[
 
-int     dt_year         (dt_t dt);
-int     dt_month        (dt_t dt);
-
-int     dt_doy          (dt_t dt);
-int     dt_dom          (dt_t dt);
+int     tnt_dt_year         (dt_t dt);
+int     tnt_dt_month        (dt_t dt);
+int     tnt_dt_doy          (dt_t dt);
+int     tnt_dt_dom          (dt_t dt);
 
 ]]
 
@@ -308,11 +307,11 @@ local function datetime_new(obj)
             -- tz offset in minutes
             check_range(offset, {0, 720}, offset)
         elseif type(offset) == 'string' then
-            local zone = parse_zone(offset)
-            if zone == nil then
+            local tzoffset = parse_zone(offset)
+            if tzoffset == nil then
                 error(('invalid time-zone format %s'):format(offset), 2)
             else
-                offset = zone.tzoffset
+                offset = tzoffset
             end
         end
     end
@@ -546,10 +545,10 @@ local function datetime_totable(self)
     local dt = local_dt(self)
 
     return {
-        year = builtin.dt_year(dt),
-        month = builtin.dt_month(dt),
-        yday = builtin.dt_doy(dt),
-        day = builtin.dt_dom(dt),
+        year = builtin.tnt_dt_year(dt),
+        month = builtin.tnt_dt_month(dt),
+        yday = builtin.tnt_dt_doy(dt),
+        day = builtin.tnt_dt_dom(dt),
         wday = ffi.cast('int32_t', builtin.tnt_dt_dow(dt)),
         hour = math_floor((secs / 3600) % 24),
         min = math_floor((secs / 60) % 60),
@@ -570,7 +569,7 @@ end
 
 local function datetime_ymd_update(self, y, M, d)
     if d > 28 then
-        local day_in_month = 31 -- builtin.dt_days_in_month(y, M)
+        local day_in_month = builtin.tnt_dt_days_in_month(y, M)
         if d > day_in_month then
             error(('invalid number of days %d in month %d for %d'):
                   format(d, M, y), 3)
@@ -692,15 +691,15 @@ ffi.metatype(datetime_t, {
         msec = function(self) return self.nsec / 1e6 end,
 
         dt = function(self) return local_dt(self) end,
-        year = function(self) return builtin.dt_year(local_dt(self)) end,
-        month = function(self) return builtin.dt_month(local_dt(self)) end,
+        year = function(self) return builtin.tnt_dt_year(local_dt(self)) end,
+        month = function(self) return builtin.tnt_dt_month(local_dt(self)) end,
 
-        yday = function(self) return builtin.dt_doy(local_dt(self)) end,
+        yday = function(self) return builtin.tnt_dt_doy(local_dt(self)) end,
         wday = function(self)
             return ffi.cast('int32_t', builtin.tnt_dt_dow(local_dt(self)))
         end,
         day = function(self)
-            return builtin.dt_dom(local_dt(self))
+            return builtin.tnt_dt_dom(local_dt(self))
         end,
         hour = function(self) return math_floor((local_secs(self) / 3600) % 24) end,
         minute = function(self) return math_floor((local_secs(self) / 60) % 60) end,
