@@ -80,11 +80,11 @@ test:test("Multiple tests for parser (with nanoseconds)", function(test)
         local str, epoch, nsec, tzoffset, check
         str, epoch, nsec, tzoffset, check = unpack(value)
         local dt = date(str)
-        test:ok(dt.epoch == epoch, ('%s: dt.epoch == %d'):format(str, epoch))
-        test:ok(dt.nsec == nsec, ('%s: dt.nsec == %d'):format(str, nsec))
-        test:ok(dt.tzoffset == tzoffset, ('%s: dt.tzoffset == %d'):format(str, tzoffset))
+        test:is(dt.epoch, epoch, ('%s: dt.epoch == %d'):format(str, epoch))
+        test:is(dt.nsec, nsec, ('%s: dt.nsec == %d'):format(str, nsec))
+        test:is(dt.tzoffset, tzoffset, ('%s: dt.tzoffset == %d'):format(str, tzoffset))
         if check > 0 then
-            test:ok(str == tostring(dt), ('%s == tostring(%s)'):
+            test:is(str, tostring(dt), ('%s == tostring(%s)'):
                     format(str, tostring(dt)))
         end
     end
@@ -94,12 +94,12 @@ test:test("Datetime string formatting", function(test)
     test:plan(6)
     local str = "1970-01-01"
     local t = date(str)
-    test:ok(t.epoch == 0, ('%s: t.epoch == %d'):format(str, tonumber(t.epoch)))
-    test:ok(t.nsec == 0, ('%s: t.nsec == %d'):format(str, t.nsec))
-    test:ok(t.tzoffset == 0, ('%s: t.tzoffset == %d'):format(str, t.tzoffset))
-    test:ok(date.strftime('%d/%m/%Y', t) == '01/01/1970', ('%s: strftime #1'):format(str))
-    test:ok(date.strftime('%A %d. %B %Y', t) == 'Thursday 01. January 1970', ('%s: strftime #2'):format(str))
-    test:ok(date.strftime('%FT%T%z', t) == '1970-01-01T00:00:00+0000', ('%s: strftime #3'):format(str))
+    test:is(t.epoch, 0, ('%s: t.epoch == %d'):format(str, tonumber(t.epoch)))
+    test:is(t.nsec, 0, ('%s: t.nsec == %d'):format(str, t.nsec))
+    test:is(t.tzoffset, 0, ('%s: t.tzoffset == %d'):format(str, t.tzoffset))
+    test:is(date.strftime('%d/%m/%Y', t), '01/01/1970', ('%s: strftime #1'):format(str))
+    test:is(date.strftime('%A %d. %B %Y', t), 'Thursday 01. January 1970', ('%s: strftime #2'):format(str))
+    test:is(date.strftime('%FT%T%z', t), '1970-01-01T00:00:00+0000', ('%s: strftime #3'):format(str))
 end)
 
 test:test("Parse iso date - valid strings", function(test)
@@ -129,8 +129,8 @@ test:test("Parse iso date - valid strings", function(test)
         local expected_date = date{year = year, month = month, day = day}
         local date_part, len
         date_part, len = date.parse_date(str)
-        test:ok(len == date_part_len, ('%s: length check %d'):format(str, len))
-        test:ok(expected_date == date_part, ('%s: expected date'):format(str))
+        test:is(len, date_part_len, ('%s: length check %d'):format(str, len))
+        test:is(expected_date, date_part, ('%s: expected date'):format(str))
     end
 end)
 
@@ -173,8 +173,8 @@ test:test("Parse iso date - invalid strings", function(test)
     for _, str in ipairs(bad) do
         local date_part, len
         date_part, len = date.parse_date(str)
-        test:ok(len == 0, ('%s: length check %d'):format(str, len))
-        test:ok(date_part == nil, ('%s: empty date check %s'):format(str, date_part))
+        test:is(len, 0, ('%s: length check %d'):format(str, len))
+        test:is(date_part, nil, ('%s: empty date check %s'):format(str, date_part))
     end
 end)
 
@@ -182,10 +182,10 @@ test:test("Parse tiny date into seconds and other parts", function(test)
     test:plan(4)
     local str = '19700101 00:00:30.528'
     local tiny = date(str)
-    test:ok(tiny.epoch == 30, ("epoch of '%s'"):format(str))
-    test:ok(tiny.nsec == 528000000, ("nsec of '%s'"):format(str))
-    test:ok(tiny:second() == 30, "second")
-    test:ok(tiny:timestamp() == 30.528, "timestamp")
+    test:is(tiny.epoch, 30, ("epoch of '%s'"):format(str))
+    test:is(tiny.nsec, 528000000, ("nsec of '%s'"):format(str))
+    test:is(tiny:second(), 30, "second")
+    test:is(tiny:timestamp(), 30.528, "timestamp")
 end)
 
 test:test("Time interval operations", function(test)
@@ -193,12 +193,12 @@ test:test("Time interval operations", function(test)
 
     -- check arithmetic with leap dates
     local T = date('1972-02-29')
-    test:ok(tostring(T:add{years = 1, months = 2}) == '1973-05-01T00:00:00Z',
+    test:is(tostring(T:add{years = 1, months = 2}), '1973-05-01T00:00:00Z',
             ('T:add{years=1,months=2}(%s)'):format(T))
 
     -- check average, not leap dates
     T = date('1970-01-08')
-    test:ok(tostring(T:add{years = 1, months = 2}) == '1971-03-08T00:00:00Z',
+    test:is(tostring(T:add{years = 1, months = 2}), '1971-03-08T00:00:00Z',
             ('T:add{years=1,months=2}(%s)'):format(T))
 
 end)
