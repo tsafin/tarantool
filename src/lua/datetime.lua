@@ -297,17 +297,20 @@ local function datetime_new(obj)
         check_range(m, {0, 59}, 'min')
         hms = true
     end
+    local sec = obj.sec
+    if sec ~= nil then
+        check_range(sec, {0, 60}, 'sec')
+        hms = true
+    end
     local nsec, usec, msec = obj.nsec, obj.usec, obj.msec
     -- if there are separate nsec, usec, or msec provided then
     -- timestamp should be integer
     local int_ts = nsec ~= nil or usec ~= nil or msec ~= nil
 
     local ts = obj.timestamp
-    local sec_int = 0
     local fraction
     if ts ~= nil then
-        check_range(ts, {0, 60}, 'sec')
-        sec_int, fraction = math_modf(ts)
+        sec, fraction = math_modf(ts)
         if not int_ts then
             nsec = fraction * 1e9
         end
@@ -332,7 +335,7 @@ local function datetime_new(obj)
     -- .hour, .minute, .second
     local secs = 0
     if hms then
-        secs = (h or 0) * 3600 + (m or 0) * 60 + (sec_int or 0)
+        secs = (h or 0) * 3600 + (m or 0) * 60 + (sec or 0)
     end
 
     return datetime_new_dt(dt, secs, nsec, offset or 0)
@@ -341,7 +344,7 @@ end
 --[[
     Convert to text datetime values
 
-    - datetime will use ISO-8601 forat:
+    - datetime will use ISO-8601 format:
         1970-01-01T00:00Z
         2021-08-18T16:57:08.981725+03:00
 ]]
@@ -564,14 +567,14 @@ local function datetime_totable(self)
     }
 end
 
-local function datetime_update_dt(self, dt)
+local function datetime_update_dt(self, dt, new_offset)
     local epoch = local_secs(self)
     local secs_day = epoch % SECS_PER_DAY
     epoch = (builtin.tnt_dt_rdn(dt) - DT_EPOCH_1970_OFFSET) * SECS_PER_DAY + secs_day
-    self.epoch = utc_secs(epoch, self.tzoffset)
+    self.epoch = utc_secs(epoch, new_offset)
 end
 
-local function datetime_ymd_update(self, y, M, d)
+local function datetime_ymd_update(self, y, M, d, new_offset)
     if d > 28 then
         local day_in_month = builtin.tnt_dt_days_in_month(y, M)
         if d > day_in_month then
@@ -580,13 +583,13 @@ local function datetime_ymd_update(self, y, M, d)
         end
     end
     local dt = builtin.tnt_dt_from_ymd(y or 0, M or 1, d or 1)
-    datetime_update_dt(self, dt)
+    datetime_update_dt(self, dt, new_offset)
 end
 
-local function datetime_hms_update(self, h, m, s)
+local function datetime_hms_update(self, h, m, s, new_offset)
     local epoch = local_secs(self)
     local secs_day = epoch - (epoch % SECS_PER_DAY)
-    self.epoch = utc_secs(secs_day + h * 3600 + m * 60 + s, self.tzoffset)
+    self.epoch = utc_secs(secs_day + h * 3600 + m * 60 + s, new_offset)
 end
 
 local function bool2int(b)
@@ -623,8 +626,8 @@ local function datetime_set(self, obj)
     end
 
     local lsecs = local_secs(self)
-    local h0 = lsecs / (24 * 60) % 24
-    local m0 = lsecs / 60 % 60
+    local h0 = math_floor(lsecs / (24 * 60)) % 24
+    local m0 = math_floor(lsecs / 60) % 60
     local sec0 = lsecs % 60
 
     local h = obj.hour
@@ -649,7 +652,30 @@ local function datetime_set(self, obj)
     if count_usec > 1 then
         error('only one of nsec, usec or msecs may defined simultaneously', 2)
     end
+    if usec ~= nil then
+        nsec = usec * 1e3
+    elseif msec ~= nil then
+        nsec = msec * 1e6
+    end
 
+    local ts = obj.timestamp
+    if ts ~= nil then
+        local sec_int, fraction
+        sec_int, fraction = math_modf(ts)
+        -- if there is one of nsec, usec, msec provided
+        -- then ignore fraction in timestamp
+        -- otherwise - use nsec, usec, or msec
+        if count_usec == 0 then
+            nsec = fraction * 1e9
+        end
+
+        self.secs = sec_int
+        self.nsec = nsec
+
+        return self
+    end
+
+    local offset0 = self.tzoffset
     local offset = obj.tzoffset
     if offset ~= nil then
         offset = get_timezone(offset)
@@ -663,13 +689,15 @@ local function datetime_set(self, obj)
 
     -- .year, .month, .day
     if ymd then
-        datetime_ymd_update(self, y or y0, M or M0, d or d0)
+        datetime_ymd_update(self, y or y0, M or M0, d or d0, offset or offset0)
     end
 
     -- .hour, .minute, .second
     if hms then
-        datetime_hms_update(self, h or h0, m or m0, sec or sec0)
+        datetime_hms_update(self, h or h0, m or m0, sec or sec0, offset or offset0)
     end
+
+    self.epoch, self.nsec = normalize_nsec(self.epoch, self.nsec)
 
     if offset ~= nil then
         self.tzoffset = offset

@@ -3,7 +3,6 @@
 local tap = require('tap')
 local test = tap.test("errno")
 local date = require('datetime')
-local ffi = require('ffi')
 
 test:plan(8)
 
@@ -207,16 +206,16 @@ end)
 test:test("Time :set{} operations", function(test)
     test:plan(8)
 
-    T = date.new{ year = 2021, month = 8, day = 31,
+    local T = date.new{ year = 2021, month = 8, day = 31,
                   hour = 0, min = 31, sec = 11, tzoffset = '+0300'}
-    test:ok(tostring(T) == '2021-08-31T00:31:00+03:00', 'initial')
-    test:ok(tostring(T:set{ year = 2020 }) == '2020-08-31T00:31:00+03:00', '2020 year')
-    test:ok(tostring(T:set{ month = 11, day = 30 }) == '2020-11-30T00:31:00+03:00', 'month = 11, day = 30')
-    test:ok(tostring(T:set{ day = 9 }) == '2020-11-09T00:31:00+03:00', 'day 9')
-    test:ok(tostring(T:set{ hour = 6 }) ==  '2020-11-09T06:31:00+03:00', 'hour 6')
-    test:ok(tostring(T:set{ min = 12, sec = 23 }) == '2020-11-09T04:29:53+03:00', 'min 12, sec 23')
-    test:ok(tostring(T:set{ tzoffset = -8*60 }) == '2020-11-08T17:29:53-08:00', 'offset -0800' )
-    test:ok(tostring(T:set{ tzoffset = '+0800' }) == '2020-11-09T09:29:53+08:00', 'offset +0800' )
+    test:is(tostring(T), '2021-08-31T00:31:11+03:00', 'initial')
+    test:is(tostring(T:set{ year = 2020 }), '2020-08-31T00:31:11+03:00', '2020 year')
+    test:is(tostring(T:set{ month = 11, day = 30 }), '2020-11-30T00:31:11+03:00', 'month = 11, day = 30')
+    test:is(tostring(T:set{ day = 9 }), '2020-11-09T00:31:11+03:00', 'day 9')
+    test:is(tostring(T:set{ hour = 6 }),  '2020-11-09T06:31:11+03:00', 'hour 6')
+    test:is(tostring(T:set{ min = 12, sec = 23 }), '2020-11-09T04:12:23+03:00', 'min 12, sec 23')
+    test:is(tostring(T:set{ tzoffset = -8*60 }), '2020-11-08T17:12:23-08:00', 'offset -0800' )
+    test:is(tostring(T:set{ tzoffset = '+0800' }), '2020-11-09T09:12:23+08:00', 'offset +0800' )
 end)
 
 os.exit(test:check() and 0 or 1)
