@@ -708,7 +708,7 @@ static int dump_node(struct lua_yaml_dumper *dumper)
          len = UUID_STR_LEN;
          break;
       case MP_DATETIME:
-         len = datetime_to_string(field.dateval, buf, sizeof(buf));
+         len = datetime_to_string(buf, sizeof(buf), field.dateval);
          str = buf;
          break;
       default:

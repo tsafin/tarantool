@@ -91,7 +91,7 @@ size_t tnt_dt_parse_iso_zone_lenient(const char *str, size_t len, int *offset);
 -- Tarantool functions - datetime.c
 ffi.cdef [[
 
-int    datetime_to_string(const struct datetime * date, char *buf, int len);
+int    datetime_to_string(char *buf, int len, const struct datetime * date);
 size_t datetime_strftime(const struct datetime *date, const char *fmt, char *buf,
                          uint32_t len);
 void   datetime_now(struct datetime *now);
@@ -341,6 +341,9 @@ local function datetime_new(obj)
     return datetime_new_dt(dt, secs, nsec, offset or 0)
 end
 
+local sz = 48
+local buff = ffi.new('char[?]', sz)
+
 --[[
     Convert to text datetime values
 
@@ -350,9 +353,7 @@ end
 ]]
 local function datetime_tostring(o)
     if ffi.typeof(o) == datetime_t then
-        local sz = 48
-        local buff = ffi.new('char[?]', sz)
-        local len = builtin.datetime_to_string(o, buff, sz)
+        local len = builtin.datetime_to_string(buff, sz, o)
         assert(len < sz)
         return ffi.string(buff)
     end

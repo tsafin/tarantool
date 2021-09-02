@@ -68,7 +68,7 @@ datetime_strftime(const struct datetime *date, const char *fmt, char *buf,
  * calculated length of output string
  */
 int
-datetime_to_string(const struct datetime *date, char *buf, int len)
+datetime_to_string(char *buf, int len, const struct datetime *date)
 {
 	int offset = date->tzoffset;
 	/* for negative offsets around Epoch date we could get

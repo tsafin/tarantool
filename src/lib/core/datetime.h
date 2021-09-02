@@ -84,11 +84,6 @@ struct datetime {
 int
 datetime_compare(const struct datetime *lhs, const struct datetime *rhs);
 
-/**
- * Required size of datetime_to_string string buffer
- */
-#define DT_TO_STRING_BUFSIZE   48
-
 /*
  * Compare arguments of a datetime type
  * @param lhs left datetime argument
@@ -107,7 +102,7 @@ datetime_compare(const struct datetime *lhs, const struct datetime *rhs);
  * @param len size ofoutput buffer
  */
 int
-datetime_to_string(const struct datetime *date, char *buf, int len);
+datetime_to_string(char *buf, int len, const struct datetime *date);
 
 /**
  * Convert datetime to string using default format provided

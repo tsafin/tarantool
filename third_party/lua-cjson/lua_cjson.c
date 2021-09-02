@@ -431,7 +431,7 @@ static void json_append_data(lua_State *l, struct luaL_serializer *cfg,
         case MP_DATETIME:
         {
             char buf[DT_TO_STRING_BUFSIZE];
-            size_t sz = datetime_to_string(field.dateval, buf, sizeof(buf));
+            size_t sz = datetime_to_string(buf, sizeof(buf), field.dateval);
             return json_append_string(cfg, json, buf, sz);
         }
         default:
