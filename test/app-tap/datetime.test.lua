@@ -4,7 +4,25 @@ local tap = require('tap')
 local test = tap.test("errno")
 local date = require('datetime')
 
-test:plan(9)
+test:plan(10)
+
+test:test("Default date creation", function(test)
+    test:plan(9)
+    -- check empty arguments
+    local T1 = date.new()
+    test:is(T1.epoch, 0, "T.epoch ==0")
+    test:is(T1.nsec, 0, "T.nsec == 0")
+    test:is(T1.tzoffset, 0, "T.tzoffset == 0")
+    test:is(tostring(T1), "1970-01-01T00:00:00Z", "tostring(T1)")
+    -- check empty table
+    local T2 = date.new{}
+    test:is(T2.epoch, 0, "T.epoch ==0")
+    test:is(T2.nsec, 0, "T.nsec == 0")
+    test:is(T2.tzoffset, 0, "T.tzoffset == 0")
+    test:is(tostring(T2), "1970-01-01T00:00:00Z", "tostring(T2)")
+    -- check their equivalence
+    test:is(T1, T2, "T1 == T2")
+end)
 
 test:test("Simple tests for parser", function(test)
     test:plan(2)

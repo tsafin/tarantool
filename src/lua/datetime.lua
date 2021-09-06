@@ -260,7 +260,7 @@ local function datetime_new(obj)
 
     local ymd = false
     local hms = false
-    local dt = 0
+    local dt = DT_EPOCH_1970_OFFSET -- default is 1970-01-01
 
     local y = obj.year
     if y ~= nil then
@@ -319,7 +319,7 @@ local function datetime_new(obj)
 
     -- .year, .month, .day
     if ymd then
-        dt = builtin.tnt_dt_from_ymd(y or 0, M or 1, d or 1)
+        dt = builtin.tnt_dt_from_ymd(y or 1970, M or 1, d or 1)
     end
 
     -- .hour, .minute, .second
