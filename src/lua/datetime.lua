@@ -542,7 +542,7 @@ local function datetime_totable(self)
         month = builtin.tnt_dt_month(dt),
         yday = builtin.tnt_dt_doy(dt),
         day = builtin.tnt_dt_dom(dt),
-        wday = ffi.cast('int32_t', builtin.tnt_dt_dow(dt)),
+        wday = (ffi.cast('int32_t', builtin.tnt_dt_dow(dt)) + 1) % 7,
         hour = math_floor((secs / 3600) % 24),
         min = math_floor((secs / 60) % 60),
         sec = secs % 60,

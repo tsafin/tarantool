@@ -231,13 +231,22 @@ test:test("Time interval operations", function(test)
 end)
 
 test:test("totable{}", function(test)
-    test:plan(1)
-    local exp = {sec = 0, min = 0, wday = 4, day = 1,
+    test:plan(9)
+    local exp = {sec = 0, min = 0, wday = 5, day = 1,
                  nsec = 0, isdst = false, yday = 1,
                  tzoffset = 0, month = 1, year = 1970, hour = 0}
     local T = date.new()
     local TT = T:totable()
     test:is_deeply(TT, exp, "date:totable()")
+
+    local D = os.date('*t')
+    TT = date.new(D):totable()
+    local keys = {
+        'sec', 'min', 'wday', 'day', 'yday', 'month', 'year', 'hour'
+    }
+    for _, key in pairs(keys) do
+        test:is(TT[key], D[key], ("[%s]: %s == %s"):format(key, TT[key], D[key]))
+    end
 end)
 
 test:test("Time :set{} operations", function(test)
