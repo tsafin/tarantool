@@ -239,16 +239,6 @@ local function datetime_new_dt(dt, secs, fraction, offset)
     return datetime_new_raw(epochV + secsV - ofsV * 60, fracV, ofsV)
 end
 
--- create datetime given attribute values from obj
--- { secs = N, nsec = M, offset = O}
-local function datetime_new_obj(obj, ...)
-    if obj == nil or type(obj) == 'table' then
-        return ffi.new(datetime_t, obj)
-    else
-        return datetime_new_raw(obj, ...)
-    end
-end
-
 local function get_timezone(offset)
     if type(offset) == 'number' then
         return offset
@@ -749,7 +739,6 @@ ffi.metatype(datetime_t, {
 return setmetatable(
     {
         new         = datetime_new,
-        new_raw     = datetime_new_obj,
 
         parse       = parse,
         parse_date  = parse_date,
