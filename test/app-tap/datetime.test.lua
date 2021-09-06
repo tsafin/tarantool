@@ -4,7 +4,14 @@ local tap = require('tap')
 local test = tap.test("errno")
 local date = require('datetime')
 
-test:plan(10)
+test:plan(11)
+
+local function assert_raises(test, error_msg, func, ...)
+    local ok, err = pcall(func, ...)
+    local err_tail = err:gsub("^.+:%d+: ", "")
+    return test:ok(not ok and err_tail == error_msg,
+                   ('"%s" received, "%s" expected'):format(err_tail, error_msg))
+end
 
 test:test("Default date creation", function(test)
     test:plan(9)
@@ -244,6 +251,63 @@ test:test("Time :set{} operations", function(test)
     test:is(tostring(T:set{ min = 12, sec = 23 }), '2020-11-09T04:12:23+03:00', 'min 12, sec 23')
     test:is(tostring(T:set{ tzoffset = -8*60 }), '2020-11-08T17:12:23-08:00', 'offset -0800' )
     test:is(tostring(T:set{ tzoffset = '+0800' }), '2020-11-09T09:12:23+08:00', 'offset +0800' )
+end)
+
+local function range_check_arror(name, value, range)
+    return ('value %d of %s is out of allowed range [%d, %d]'):
+              format(value, name, range[1], range[2])
+end
+
+test:test("Time invalid :set{} operations", function(test)
+    test:plan(17)
+
+    local T = date.new{ year = 2021, month = 8, day = 31,
+                  hour = 0, min = 31, sec = 11, tzoffset = '+0300'}
+
+    assert_raises(test, range_check_arror('year', 10000, {1, 9999}),
+                  function() T:set{ year = 10000} end)
+    assert_raises(test, range_check_arror('year', -10, {1, 9999}),
+                  function() T:set{ year = -10} end)
+
+    assert_raises(test, range_check_arror('month', 20, {1, 12}),
+                  function() T:set{ month = 20} end)
+    assert_raises(test, range_check_arror('month', 0, {1, 12}),
+                  function() T:set{ month = 0} end)
+    assert_raises(test, range_check_arror('month', -20, {1, 12}),
+                  function() T:set{ month = -20} end)
+
+    assert_raises(test,  range_check_arror('day', 40, {1, 31}),
+                  function() T:set{ day = 40} end)
+    assert_raises(test,  range_check_arror('day', 0, {1, 31}),
+                  function() T:set{ day = 0} end)
+    assert_raises(test,  range_check_arror('day', -10, {1, 31}),
+                  function() T:set{ day = -10} end)
+
+    assert_raises(test,  range_check_arror('hour', 31, {0, 23}),
+                  function() T:set{ hour = 31} end)
+    assert_raises(test,  range_check_arror('hour', -1, {0, 23}),
+                  function() T:set{ hour = -1} end)
+
+    assert_raises(test,  range_check_arror('min', 60, {0, 59}),
+                  function() T:set{ min = 60} end)
+    assert_raises(test,  range_check_arror('min', -1, {0, 59}),
+                  function() T:set{ min = -1} end)
+
+    assert_raises(test,  range_check_arror('sec', 61, {0, 60}),
+                  function() T:set{ sec = 61} end)
+    assert_raises(test,  range_check_arror('sec', -1, {0, 60}),
+                  function() T:set{ sec = -1} end)
+
+    local only1 = 'only one of nsec, usec or msecs may defined simultaneously'
+    assert_raises(test, only1, function()
+                    T:set{ nsec = 123456, usec = 123}
+                  end)
+    assert_raises(test, only1, function()
+                    T:set{ nsec = 123456, msec = 123}
+                  end)
+    assert_raises(test, only1, function()
+                    T:set{ nsec = 123456, usec = 1234, msec = 123}
+                  end)
 end)
 
 os.exit(test:check() and 0 or 1)
