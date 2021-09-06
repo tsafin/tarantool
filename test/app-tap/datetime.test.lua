@@ -4,7 +4,7 @@ local tap = require('tap')
 local test = tap.test("errno")
 local date = require('datetime')
 
-test:plan(11)
+test:plan(12)
 
 local function assert_raises(test, error_msg, func, ...)
     local ok, err = pcall(func, ...)
@@ -253,49 +253,48 @@ test:test("Time :set{} operations", function(test)
     test:is(tostring(T:set{ tzoffset = '+0800' }), '2020-11-09T09:12:23+08:00', 'offset +0800' )
 end)
 
-local function range_check_arror(name, value, range)
-    return ('value %d of %s is out of allowed range [%d, %d]'):
+local function range_check_error(name, value, range)
+    return ('value %s of %s is out of allowed range [%d, %d]'):
               format(value, name, range[1], range[2])
 end
 
 test:test("Time invalid :set{} operations", function(test)
     test:plan(17)
 
-    local T = date.new{ year = 2021, month = 8, day = 31,
-                  hour = 0, min = 31, sec = 11, tzoffset = '+0300'}
+    local T = date.new{}
 
-    assert_raises(test, range_check_arror('year', 10000, {1, 9999}),
+    assert_raises(test, range_check_error('year', 10000, {1, 9999}),
                   function() T:set{ year = 10000} end)
-    assert_raises(test, range_check_arror('year', -10, {1, 9999}),
+    assert_raises(test, range_check_error('year', -10, {1, 9999}),
                   function() T:set{ year = -10} end)
 
-    assert_raises(test, range_check_arror('month', 20, {1, 12}),
+    assert_raises(test, range_check_error('month', 20, {1, 12}),
                   function() T:set{ month = 20} end)
-    assert_raises(test, range_check_arror('month', 0, {1, 12}),
+    assert_raises(test, range_check_error('month', 0, {1, 12}),
                   function() T:set{ month = 0} end)
-    assert_raises(test, range_check_arror('month', -20, {1, 12}),
+    assert_raises(test, range_check_error('month', -20, {1, 12}),
                   function() T:set{ month = -20} end)
 
-    assert_raises(test,  range_check_arror('day', 40, {1, 31}),
+    assert_raises(test,  range_check_error('day', 40, {1, 31}),
                   function() T:set{ day = 40} end)
-    assert_raises(test,  range_check_arror('day', 0, {1, 31}),
+    assert_raises(test,  range_check_error('day', 0, {1, 31}),
                   function() T:set{ day = 0} end)
-    assert_raises(test,  range_check_arror('day', -10, {1, 31}),
+    assert_raises(test,  range_check_error('day', -10, {1, 31}),
                   function() T:set{ day = -10} end)
 
-    assert_raises(test,  range_check_arror('hour', 31, {0, 23}),
+    assert_raises(test,  range_check_error('hour', 31, {0, 23}),
                   function() T:set{ hour = 31} end)
-    assert_raises(test,  range_check_arror('hour', -1, {0, 23}),
+    assert_raises(test,  range_check_error('hour', -1, {0, 23}),
                   function() T:set{ hour = -1} end)
 
-    assert_raises(test,  range_check_arror('min', 60, {0, 59}),
+    assert_raises(test,  range_check_error('min', 60, {0, 59}),
                   function() T:set{ min = 60} end)
-    assert_raises(test,  range_check_arror('min', -1, {0, 59}),
+    assert_raises(test,  range_check_error('min', -1, {0, 59}),
                   function() T:set{ min = -1} end)
 
-    assert_raises(test,  range_check_arror('sec', 61, {0, 60}),
+    assert_raises(test,  range_check_error('sec', 61, {0, 60}),
                   function() T:set{ sec = 61} end)
-    assert_raises(test,  range_check_arror('sec', -1, {0, 60}),
+    assert_raises(test,  range_check_error('sec', -1, {0, 60}),
                   function() T:set{ sec = -1} end)
 
     local only1 = 'only one of nsec, usec or msecs may defined simultaneously'
@@ -308,6 +307,39 @@ test:test("Time invalid :set{} operations", function(test)
     assert_raises(test, only1, function()
                     T:set{ nsec = 123456, usec = 1234, msec = 123}
                   end)
+end)
+
+local function invalid_tz_fmt_error(val)
+    return ('invalid time-zone format %s'):format(val)
+end
+
+test:test("Time invalid tzoffset in :set{} operations", function(test)
+    test:plan(10)
+
+    local T = date.new{}
+    local bad_strings = {
+        'bogus',
+        '0100',
+        '+-0100',
+        '+25:00',
+        '+99:00',
+        '-99:00',
+    }
+    for _, val in ipairs(bad_strings) do
+        assert_raises(test, invalid_tz_fmt_error(val),
+                      function() T:set{ tzoffset = val } end)
+    end
+
+    local bad_numbers = {
+        800,
+        -800,
+        10000,
+        -10000,
+    }
+    for _, val in ipairs(bad_numbers) do
+        assert_raises(test, range_check_error('tzoffset', val, {-720, 720}),
+                      function() T:set{ tzoffset = val } end)
+    end
 end)
 
 os.exit(test:check() and 0 or 1)

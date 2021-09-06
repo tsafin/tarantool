@@ -386,7 +386,7 @@ parse_zone = function(str)
     check_str("datetime.parse_zone()")
     local offset = ffi.new('int[1]')
     local len = builtin.tnt_dt_parse_iso_zone_lenient(str, #str, offset)
-    return len > 0 and offset[0], tonumber(len)
+    return len > 0 and offset[0] or nil, tonumber(len)
 end
 
 --[[
@@ -664,7 +664,7 @@ local function datetime_set(self, obj)
     local offset = obj.tzoffset
     if offset ~= nil then
         offset = get_timezone(offset)
-        check_range(offset, {-720, 720}, offset)
+        check_range(offset, {-720, 720}, 'tzoffset')
         -- self.tzoffset = offset
     end
 
