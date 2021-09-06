@@ -243,12 +243,7 @@ local function get_timezone(offset)
     if type(offset) == 'number' then
         return offset
     elseif type(offset) == 'string' then
-        local tzoffset = parse_zone(offset)
-        if tzoffset == nil then
-            error(('invalid time-zone format %s'):format(offset), 2)
-        else
-            return tzoffset
-        end
+        return parse_zone(offset)
     end
 end
 
@@ -386,7 +381,10 @@ parse_zone = function(str)
     check_str("datetime.parse_zone()")
     local offset = ffi.new('int[1]')
     local len = builtin.tnt_dt_parse_iso_zone_lenient(str, #str, offset)
-    return len > 0 and offset[0] or nil, tonumber(len)
+    if len == 0 then
+        error(('invalid time-zone format %s'):format(str), 3)
+    end
+    return offset[0]
 end
 
 --[[
