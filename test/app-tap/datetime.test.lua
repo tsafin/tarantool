@@ -159,8 +159,12 @@ test:test("Parse iso date - valid strings", function(test)
     end
 end)
 
+local function invalid_date_fmt_error(str)
+    return ('invalid date format %s'):format(str)
+end
+
 test:test("Parse iso date - invalid strings", function(test)
-    test:plan(62)
+    test:plan(31)
     local bad = {
         "20121232"   , -- Invalid day of month
         "2012-12-310", -- Invalid day of month
@@ -196,10 +200,8 @@ test:test("Parse iso date - invalid strings", function(test)
     }
 
     for _, str in ipairs(bad) do
-        local date_part, len
-        date_part, len = date.parse_date(str)
-        test:is(len, 0, ('%s: length check %d'):format(str, len))
-        test:is(date_part, nil, ('%s: empty date check %s'):format(str, date_part))
+        assert_raises(test, invalid_date_fmt_error(str),
+                      function() date.parse_date(str) end)
     end
 end)
 

@@ -362,8 +362,11 @@ end
 local function parse_date(str)
     check_str("datetime.parse_date()")
     local dt = ffi.new('dt_t[1]')
-    local len = builtin.tnt_dt_parse_iso_date(str, #str, dt)
-    return len > 0 and datetime_new_dt(dt[0]) or nil, tonumber(len)
+    local len = tonumber(builtin.tnt_dt_parse_iso_date(str, #str, dt))
+    if len == 0 then
+        error(('invalid date format %s'):format(str), 2)
+    end
+    return datetime_new_dt(dt[0]), len
 end
 
 --[[
