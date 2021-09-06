@@ -500,12 +500,11 @@ local function datetime_increment(self, o, direction)
     local years, months, weeks = o.years, o.months, o.weeks
 
     if years ~= nil then
-        check_range(years, {0, 9999}, 'years')
+        check_range(years, {-9999, 9999}, 'years')
         dt = builtin.tnt_dt_add_years(dt, direction * years, builtin.DT_LIMIT)
         ym_updated = true
     end
     if months ~= nil then
-        check_range(months, {0, 12}, 'months')
         dt = builtin.tnt_dt_add_months(dt, direction * months, builtin.DT_LIMIT)
         ym_updated = true
     end
@@ -515,25 +514,20 @@ local function datetime_increment(self, o, direction)
     end
 
     if weeks ~= nil then
-        check_range(weeks, {0, 52}, 'weeks')
         secs = secs + direction * 7 * weeks * SECS_PER_DAY
     end
 
     local days, hours, minutes, seconds = o.days, o.hours, o.minutes, o.seconds
     if days ~= nil then
-        check_range(days, {0, 31}, 'days')
         secs = secs + direction * days * SECS_PER_DAY
     end
     if hours ~= nil then
-        check_range(hours, {0, 23}, 'hours')
         secs = secs + direction * 60 * 60 * hours
     end
     if minutes ~= nil then
-        check_range(minutes, {0, 59}, 'minutes')
         secs = secs + direction * 60 * minutes
     end
     if seconds ~= nil then
-        check_range(seconds, {0, 60}, 'seconds')
         local s, frac = math.modf(seconds)
         secs = secs + direction * s
         nsec = nsec + direction * frac * 1e9
