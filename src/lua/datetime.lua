@@ -141,7 +141,7 @@ local function check_range(v, range, txt)
     assert(#range == 2)
     if v < range[1] or v > range[2] then
         error(('value %d of %s is out of allowed range [%d, %d]'):
-              format(v, txt, range[1], range[2]), 4)
+              format(v, txt, range[1], range[2]), 2)
     end
 end
 
@@ -297,9 +297,9 @@ local function datetime_new(obj)
         check_range(m, {0, 59}, 'min')
         hms = true
     end
-    local sec = obj.sec
-    if sec ~= nil then
-        check_range(sec, {0, 60}, 'sec')
+    local s = obj.sec
+    if s ~= nil then
+        check_range(s, {0, 60}, 'sec')
         hms = true
     end
     local nsec, usec, msec = obj.nsec, obj.usec, obj.msec
@@ -310,7 +310,7 @@ local function datetime_new(obj)
     local ts = obj.timestamp
     local fraction
     if ts ~= nil then
-        sec, fraction = math_modf(ts)
+        s, fraction = math_modf(ts)
         if not int_ts then
             nsec = fraction * 1e9
         end
@@ -335,7 +335,7 @@ local function datetime_new(obj)
     -- .hour, .minute, .second
     local secs = 0
     if hms then
-        secs = (h or 0) * 3600 + (m or 0) * 60 + (sec or 0)
+        secs = (h or 0) * 3600 + (m or 0) * 60 + (s or 0)
     end
 
     return datetime_new_dt(dt, secs, nsec, offset or 0)

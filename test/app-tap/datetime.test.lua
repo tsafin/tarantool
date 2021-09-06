@@ -4,7 +4,7 @@ local tap = require('tap')
 local test = tap.test("errno")
 local date = require('datetime')
 
-test:plan(8)
+test:plan(9)
 
 test:test("Simple tests for parser", function(test)
     test:plan(2)
@@ -201,6 +201,16 @@ test:test("Time interval operations", function(test)
     test:is(tostring(T:add{years = 1, months = 2}), '1971-03-08T00:00:00Z',
             ('T:add{years=1,months=2}(%s)'):format(T))
 
+end)
+
+test:test("totable{}", function(test)
+    test:plan(1)
+    local exp = {sec = 0, min = 0, wday = 4, day = 1,
+                 nsec = 0, isdst = false, yday = 1,
+                 tzoffset = 0, month = 1, year = 1970, hour = 0}
+    local T = date.new()
+    local TT = T:totable()
+    test:is_deeply(TT, exp, "date:totable()")
 end)
 
 test:test("Time :set{} operations", function(test)
