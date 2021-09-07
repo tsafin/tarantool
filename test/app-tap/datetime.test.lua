@@ -32,11 +32,16 @@ test:test("Default date creation", function(test)
 end)
 
 test:test("Simple tests for parser", function(test)
-    test:plan(2)
+    test:plan(4)
     test:ok(date("1970-01-01T01:00:00Z") ==
-            date {year=1970, month=1, day=1, hour=1, minute=0, second=0})
+            date {year=1970, mon=1, day=1, hour=1, min=0, sec=0})
     test:ok(date("1970-01-01T02:00:00+02:00") ==
-            date {year=1970, month=1, day=1, hour=2, minute=0, second=0, tzoffset=120})
+            date {year=1970, mon=1, day=1, hour=2, min=0, sec=0, tzoffset=120})
+
+    test:ok(date("1970-01-01T02:00:00Z") <
+            date {year=1970, mon=1, day=1, hour=2, min=0, sec=1})
+    test:ok(date("1970-01-01T02:00:00Z") <=
+            date {year=1970, mon=1, day=1, hour=2, min=0, sec=0})
 end)
 
 test:test("Multiple tests for parser (with nanoseconds)", function(test)
