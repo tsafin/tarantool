@@ -14,9 +14,9 @@ local ffi = require('ffi')
     (0001-01-01) in dates.
 ]]
 
--- dt_core.h definitions
 ffi.cdef [[
 
+/* dt_core.h definitions */
 typedef int dt_t;
 
 typedef enum {
@@ -45,27 +45,21 @@ void   tnt_dt_to_ywd       (dt_t dt, int *y, int *w, int *d);
 int    tnt_dt_rdn          (dt_t dt);
 dt_dow_t tnt_dt_dow        (dt_t dt);
 
-// dt_util.h
+/* dt_util.h */
 bool    tnt_dt_leap_year       (int y);
 int     tnt_dt_days_in_year    (int y);
 int     tnt_dt_days_in_quarter (int y, int q);
 int     tnt_dt_days_in_month   (int y, int m);
 int     tnt_dt_weeks_in_year   (int y);
 
-]]
-
--- dt_accessor.h
-ffi.cdef [[
+/* dt_accessor.h */
 
 int     tnt_dt_year         (dt_t dt);
 int     tnt_dt_month        (dt_t dt);
 int     tnt_dt_doy          (dt_t dt);
 int     tnt_dt_dom          (dt_t dt);
 
-]]
-
--- dt_arithmetic.h definitions
-ffi.cdef [[
+/* dt_arithmetic.h definitions */
 
 typedef enum {
     DT_EXCESS,
@@ -77,19 +71,13 @@ dt_t   tnt_dt_add_years    (dt_t dt, int delta, dt_adjust_t adjust);
 dt_t   tnt_dt_add_quarters (dt_t dt, int delta, dt_adjust_t adjust);
 dt_t   tnt_dt_add_months   (dt_t dt, int delta, dt_adjust_t adjust);
 
-]]
-
--- dt_parse_iso.h definitions
-ffi.cdef [[
+/* dt_parse_iso.h definitions */
 
 size_t tnt_dt_parse_iso_date (const char *str, size_t len, dt_t *dt);
 size_t tnt_dt_parse_iso_time (const char *str, size_t len, int *sod, int *nsec);
 size_t tnt_dt_parse_iso_zone_lenient(const char *str, size_t len, int *offset);
 
-]]
-
--- Tarantool functions - datetime.c
-ffi.cdef [[
+/* Tarantool functions - datetime.c */
 
 int    datetime_to_string(char *buf, int len, const struct datetime * date);
 size_t datetime_strftime(const struct datetime *date, const char *fmt, char *buf,
