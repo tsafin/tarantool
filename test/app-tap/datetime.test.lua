@@ -4,7 +4,7 @@ local tap = require('tap')
 local test = tap.test("errno")
 local date = require('datetime')
 
-test:plan(12)
+test:plan(13)
 
 local function assert_raises(test, error_msg, func, ...)
     local ok, err = pcall(func, ...)
@@ -274,6 +274,11 @@ local function range_check_error(name, value, range)
               format(value, name, range[1], range[2])
 end
 
+local function range_check_3_error(v)
+    return ('value %d of %s is out of allowed range [%d, %d..%d]'):
+            format(v, 'day', -1, 1, 31)
+end
+
 test:test("Time invalid :set{} operations", function(test)
     test:plan(17)
 
@@ -291,11 +296,11 @@ test:test("Time invalid :set{} operations", function(test)
     assert_raises(test, range_check_error('month', -20, {1, 12}),
                   function() T:set{ month = -20} end)
 
-    assert_raises(test,  range_check_error('day', 40, {1, 31}),
+    assert_raises(test,  range_check_3_error(40),
                   function() T:set{ day = 40} end)
-    assert_raises(test,  range_check_error('day', 0, {1, 31}),
+    assert_raises(test,  range_check_3_error(0),
                   function() T:set{ day = 0} end)
-    assert_raises(test,  range_check_error('day', -10, {1, 31}),
+    assert_raises(test,  range_check_3_error(-10),
                   function() T:set{ day = -10} end)
 
     assert_raises(test,  range_check_error('hour', 31, {0, 23}),
@@ -356,6 +361,36 @@ test:test("Time invalid tzoffset in :set{} operations", function(test)
         assert_raises(test, range_check_error('tzoffset', val, {-720, 720}),
                       function() T:set{ tzoffset = val } end)
     end
+end)
+
+
+test:test("Time :set{day = -1} operations", function(test)
+    test:plan(14)
+    local tests = {
+        {{ year = 2000, month = 3, day = -1}, '2000-03-31T00:00:00Z'},
+        {{ year = 2000, month = 2, day = -1}, '2000-02-29T00:00:00Z'},
+        {{ year = 2001, month = 2, day = -1}, '2001-02-28T00:00:00Z'},
+        {{ year = 1900, month = 2, day = -1}, '1900-02-28T00:00:00Z'},
+        {{ year = 1904, month = 2, day = -1}, '1904-02-29T00:00:00Z'},
+    }
+    local T
+    for _, row in ipairs(tests) do
+        local args, str = unpack(row)
+        T = date.new(args)
+        test:is(tostring(T), str, ('checking -1 with %s'):format(str))
+    end
+    assert_raises(test, range_check_3_error(0), function() T = date.new{day = 0} end)
+    assert_raises(test, range_check_3_error(-2), function() T = date.new{day = -2} end)
+    assert_raises(test, range_check_3_error(-10), function() T = date.new{day = -10} end)
+
+    T = date.new{ year = 1904, month = 2, day = -1 }
+    test:is(tostring(T), '1904-02-29T00:00:00Z', 'base before :set{}')
+    test:is(tostring(T:set{month = 3, day = 2}), '1904-03-02T00:00:00Z', '2 March')
+    test:is(tostring(T:set{day = -1}), '1904-03-31T00:00:00Z', '31 March')
+
+    assert_raises(test, range_check_3_error(0), function() T:set{day = 0} end)
+    assert_raises(test, range_check_3_error(-2), function() T:set{day = -2} end)
+    assert_raises(test, range_check_3_error(-10), function() T:set{day = -10} end)
 end)
 
 os.exit(test:check() and 0 or 1)

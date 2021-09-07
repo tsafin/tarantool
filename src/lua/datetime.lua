@@ -125,11 +125,24 @@ local function check_str(s, message)
     end
 end
 
+-- range may be of a form of pair {begin, end} or
+-- tuple {begin, end, negative}
+-- negative is a special value (so far) used for days only
 local function check_range(v, range, txt)
-    assert(#range == 2)
-    if v < range[1] or v > range[2] then
+    local len = #range
+    assert(len == 2 or len == 3)
+
+    local left, right, neg = unpack(range)
+    if neg == v or (v >= left and v <= right) then
+        return
+    end
+
+    if neg == nil then
         error(('value %d of %s is out of allowed range [%d, %d]'):
-              format(v, txt, range[1], range[2]), 2)
+              format(v, txt, left, right), 2)
+    else
+        error(('value %d of %s is out of allowed range [%d, %d..%d]'):
+              format(v, txt, neg, left, right), 2)
     end
 end
 
@@ -257,7 +270,7 @@ local function datetime_new(obj)
     end
     local d = obj.day
     if d ~= nil then
-        check_range(d, {1, 31}, 'day')
+        check_range(d, {1, 31, -1}, 'day')
         ymd = true
     end
     local h = obj.hour
@@ -302,7 +315,12 @@ local function datetime_new(obj)
 
     -- .year, .month, .day
     if ymd then
-        dt = builtin.tnt_dt_from_ymd(y or 1970, M or 1, d or 1)
+        y = y or 1970
+        M = M or 1
+        if d ~= nil and d < 0 then
+            d = builtin.tnt_dt_days_in_month(y, M)
+        end
+        dt = builtin.tnt_dt_from_ymd(y, M, d)
     end
 
     -- .hour, .minute, .second
@@ -549,6 +567,9 @@ local function datetime_update_dt(self, dt, new_offset)
 end
 
 local function datetime_ymd_update(self, y, M, d, new_offset)
+    if d < 0 then
+        d = builtin.tnt_dt_days_in_month(y, M)
+    end
     if d > 28 then
         local day_in_month = builtin.tnt_dt_days_in_month(y, M)
         if d > day_in_month then
@@ -595,7 +616,7 @@ local function datetime_set(self, obj)
     end
     local d = obj.day
     if d ~= nil then
-        check_range(d, {1, 31}, 'day')
+        check_range(d, {1, 31, -1}, 'day')
         ymd = true
     end
 
