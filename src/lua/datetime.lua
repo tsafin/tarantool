@@ -476,6 +476,65 @@ local function local_now()
     return d
 end
 
+-- addition or subtraction from date/time of a given interval
+-- described via table direction should be +1 or -1
+local function datetime_increment(self, o, direction)
+    assert(direction == -1 or direction == 1)
+    local title = direction > 0 and "datetime.add" or "datetime.sub"
+    check_date(self, title)
+    if type(o) ~= 'table' then
+        error(('%s - object expected'):format(title), 2)
+    end
+
+    local secs, nsec = self.epoch, self.nsec
+    local offset = self.tzoffset
+
+    -- operations with intervals should be done using human dates
+    -- not UTC dates, thus we normalize to UTC
+    local dt = local_dt(self)
+
+    local ym_updated = false
+    local years, months, weeks = o.years, o.months, o.weeks
+
+    if years ~= nil then
+        check_range(years, {-9999, 9999}, 'years')
+        dt = builtin.tnt_dt_add_years(dt, direction * years, builtin.DT_LIMIT)
+        ym_updated = true
+    end
+    if months ~= nil then
+        dt = builtin.tnt_dt_add_months(dt, direction * months, builtin.DT_LIMIT)
+        ym_updated = true
+    end
+    if ym_updated then
+        secs = (builtin.tnt_dt_rdn(dt) - DT_EPOCH_1970_OFFSET) * SECS_PER_DAY +
+                secs % SECS_PER_DAY
+    end
+
+    if weeks ~= nil then
+        secs = secs + direction * 7 * weeks * SECS_PER_DAY
+    end
+
+    local days, hours, minutes, seconds = o.days, o.hours, o.minutes, o.seconds
+    if days ~= nil then
+        secs = secs + direction * days * SECS_PER_DAY
+    end
+    if hours ~= nil then
+        secs = secs + direction * 60 * 60 * hours
+    end
+    if minutes ~= nil then
+        secs = secs + direction * 60 * minutes
+    end
+    if seconds ~= nil then
+        local s, frac = math.modf(seconds)
+        secs = secs + direction * s
+        nsec = nsec + direction * frac * 1e9
+    end
+
+    secs, nsec = normalize_nsec(secs, nsec)
+
+    return datetime_new_raw(secs, nsec, offset)
+end
+
 --[[
     Return table in os.date('*t') format, but with timezone
     and nanoseconds
@@ -679,6 +738,8 @@ ffi.metatype(datetime_t, {
         minute = function(self) return math_floor((local_secs(self) / 60) % 60) end,
         second = function(self) return self.epoch % 60 end,
 
+        add = function(self, obj) return datetime_increment(self, obj, 1) end,
+        sub = function(self, obj) return datetime_increment(self, obj, -1) end,
         format = datetime_tostring,
         totable = datetime_totable,
         set = datetime_set,

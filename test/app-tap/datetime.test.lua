@@ -4,7 +4,7 @@ local tap = require('tap')
 local test = tap.test("errno")
 local date = require('datetime')
 
-test:plan(12)
+test:plan(13)
 
 local function assert_raises(test, error_msg, func, ...)
     local ok, err = pcall(func, ...)
@@ -218,6 +218,21 @@ test:test("Parse tiny date into seconds and other parts", function(test)
     test:is(tiny.nsec, 528000000, ("nsec of '%s'"):format(str))
     test:is(tiny:second(), 30, "second")
     test:is(tiny:timestamp(), 30.528, "timestamp")
+end)
+
+test:test("Time interval operations", function(test)
+    test:plan(2)
+
+    -- check arithmetic with leap dates
+    local T = date('1972-02-29')
+    test:is(tostring(T:add{years = 1, months = 2}), '1973-05-01T00:00:00Z',
+            ('T:add{years=1,months=2}(%s)'):format(T))
+
+    -- check average, not leap dates
+    T = date('1970-01-08')
+    test:is(tostring(T:add{years = 1, months = 2}), '1971-03-08T00:00:00Z',
+            ('T:add{years=1,months=2}(%s)'):format(T))
+
 end)
 
 test:test("totable{}", function(test)
