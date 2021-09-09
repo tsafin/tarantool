@@ -6,6 +6,7 @@
  */
 
 #include <limits.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <sys/types.h>
 
@@ -112,6 +113,10 @@ datetime_now(struct datetime *now);
  */
 void
 datetime_to_tm(const struct datetime *date, struct tnt_tm *tm);
+
+bool
+datetime_parse_full(struct datetime *date, const char *str, size_t len,
+		   int32_t offset);
 
 #if defined(__cplusplus)
 } /* extern "C" */

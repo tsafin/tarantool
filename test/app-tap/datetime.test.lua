@@ -11,7 +11,7 @@ local ffi = require('ffi')
 --]]
 if jit.arch == 'arm64' then jit.off() end
 
-test:plan(22)
+test:plan(27)
 
 -- minimum supported date - -5879610-06-22
 local MIN_DATE_YEAR = -5879610
@@ -90,6 +90,10 @@ end
 
 local function invalid_tz_fmt_error(val)
     return ('invalid time-zone format %s'):format(val)
+end
+
+local function invalid_date_fmt_error(str)
+    return ('invalid date format %s'):format(str)
 end
 
 -- utility functions to gracefully handle pcall errors
@@ -372,6 +376,95 @@ test:test("Formatting limits", function(test)
         s = ts:format(bogus_fmt)
         test:is(len, #bogus_fmt, ('bogus format lengths check %d'):format(len))
         test:is(s, bogus_fmt, 'bogus format equality check')
+    end
+end)
+
+test:test("Simple tests for parser", function(test)
+    test:plan(4)
+    test:ok(date.parse("1970-01-01T01:00:00Z") ==
+            date.new{year=1970, mon=1, day=1, hour=1, min=0, sec=0})
+    test:ok(date.parse("1970-01-01T02:00:00+02:00") ==
+            date.new{year=1970, mon=1, day=1, hour=2, min=0, sec=0, tzoffset=120})
+
+    test:ok(date.parse("1970-01-01T02:00:00Z") <
+            date.new{year=1970, mon=1, day=1, hour=2, min=0, sec=1})
+    test:ok(date.parse("1970-01-01T02:00:00Z") <=
+            date.new{year=1970, mon=1, day=1, hour=2, min=0, sec=0})
+end)
+
+test:test("Multiple tests for parser (with nanoseconds)", function(test)
+    test:plan(193)
+    -- borrowed from p5-time-moments/t/180_from_string.t
+    local tests =
+    {
+        {'1970-01-01T00:00:00Z',               0,         0,    0, 1},
+        {'1970-01-01T02:00:00+0200',           0,         0,  120, 1},
+        {'1970-01-01T01:30:00+0130',           0,         0,   90, 1},
+        {'1970-01-01T01:00:00+0100',           0,         0,   60, 1},
+        {'1970-01-01T00:01:00+0001',           0,         0,    1, 1},
+        {'1970-01-01T00:00:00Z',               0,         0,    0, 1},
+        {'1969-12-31T23:59:00-0001',           0,         0,   -1, 1},
+        {'1969-12-31T23:00:00-0100',           0,         0,  -60, 1},
+        {'1969-12-31T22:30:00-0130',           0,         0,  -90, 1},
+        {'1969-12-31T22:00:00-0200',           0,         0, -120, 1},
+        {'1970-01-01T00:00:00.123456789Z',     0, 123456789,    0, 1},
+        {'1970-01-01T00:00:00.12345678Z',      0, 123456780,    0, 0},
+        {'1970-01-01T00:00:00.1234567Z',       0, 123456700,    0, 0},
+        {'1970-01-01T00:00:00.123456Z',        0, 123456000,    0, 1},
+        {'1970-01-01T00:00:00.12345Z',         0, 123450000,    0, 0},
+        {'1970-01-01T00:00:00.1234Z',          0, 123400000,    0, 0},
+        {'1970-01-01T00:00:00.123Z',           0, 123000000,    0, 1},
+        {'1970-01-01T00:00:00.12Z',            0, 120000000,    0, 0},
+        {'1970-01-01T00:00:00.1Z',             0, 100000000,    0, 0},
+        {'1970-01-01T00:00:00.01Z',            0,  10000000,    0, 0},
+        {'1970-01-01T00:00:00.001Z',           0,   1000000,    0, 1},
+        {'1970-01-01T00:00:00.0001Z',          0,    100000,    0, 0},
+        {'1970-01-01T00:00:00.00001Z',         0,     10000,    0, 0},
+        {'1970-01-01T00:00:00.000001Z',        0,      1000,    0, 1},
+        {'1970-01-01T00:00:00.0000001Z',       0,       100,    0, 0},
+        {'1970-01-01T00:00:00.00000001Z',      0,        10,    0, 0},
+        {'1970-01-01T00:00:00.000000001Z',     0,         1,    0, 1},
+        {'1970-01-01T00:00:00.000000009Z',     0,         9,    0, 1},
+        {'1970-01-01T00:00:00.00000009Z',      0,        90,    0, 0},
+        {'1970-01-01T00:00:00.0000009Z',       0,       900,    0, 0},
+        {'1970-01-01T00:00:00.000009Z',        0,      9000,    0, 1},
+        {'1970-01-01T00:00:00.00009Z',         0,     90000,    0, 0},
+        {'1970-01-01T00:00:00.0009Z',          0,    900000,    0, 0},
+        {'1970-01-01T00:00:00.009Z',           0,   9000000,    0, 1},
+        {'1970-01-01T00:00:00.09Z',            0,  90000000,    0, 0},
+        {'1970-01-01T00:00:00.9Z',             0, 900000000,    0, 0},
+        {'1970-01-01T00:00:00.99Z',            0, 990000000,    0, 0},
+        {'1970-01-01T00:00:00.999Z',           0, 999000000,    0, 1},
+        {'1970-01-01T00:00:00.9999Z',          0, 999900000,    0, 0},
+        {'1970-01-01T00:00:00.99999Z',         0, 999990000,    0, 0},
+        {'1970-01-01T00:00:00.999999Z',        0, 999999000,    0, 1},
+        {'1970-01-01T00:00:00.9999999Z',       0, 999999900,    0, 0},
+        {'1970-01-01T00:00:00.99999999Z',      0, 999999990,    0, 0},
+        {'1970-01-01T00:00:00.999999999Z',     0, 999999999,    0, 1},
+        {'1970-01-01T00:00:00.0Z',             0,         0,    0, 0},
+        {'1970-01-01T00:00:00.00Z',            0,         0,    0, 0},
+        {'1970-01-01T00:00:00.000Z',           0,         0,    0, 0},
+        {'1970-01-01T00:00:00.0000Z',          0,         0,    0, 0},
+        {'1970-01-01T00:00:00.00000Z',         0,         0,    0, 0},
+        {'1970-01-01T00:00:00.000000Z',        0,         0,    0, 0},
+        {'1970-01-01T00:00:00.0000000Z',       0,         0,    0, 0},
+        {'1970-01-01T00:00:00.00000000Z',      0,         0,    0, 0},
+        {'1970-01-01T00:00:00.000000000Z',     0,         0,    0, 0},
+        {'1973-11-29T21:33:09Z',       123456789,         0,    0, 1},
+        {'2013-10-28T17:51:56Z',      1382982716,         0,    0, 1},
+        {'9999-12-31T23:59:59Z',    253402300799,         0,    0, 1},
+    }
+    for _, value in ipairs(tests) do
+        local str, epoch, nsec, tzoffset, check
+        str, epoch, nsec, tzoffset, check = unpack(value)
+        local dt = date.parse(str)
+        test:is(dt.epoch, epoch, ('%s: dt.epoch == %d'):format(str, epoch))
+        test:is(dt.nsec, nsec, ('%s: dt.nsec == %d'):format(str, nsec))
+        test:is(dt.tzoffset, tzoffset, ('%s: dt.tzoffset == %d'):format(str, tzoffset))
+        if check > 0 then
+            test:is(str, tostring(dt), ('%s == tostring(%s)'):
+                    format(str, tostring(dt)))
+        end
     end
 end)
 
@@ -1106,6 +1199,90 @@ test:test("Matrix of allowed time and interval subtractions", function(test)
     test:is(catchsub_status(min_date, new_ival{month = 24}), false, "min - 24m")
     test:is(catchsub_status(min_date, new_ival{week = 10}), true, "min - 10wk")
     test:is(catchsub_status(min_date, new_ival{week = 100}), false, "min - 100wk")
+end)
+
+test:test("Parse iso date - valid strings", function(test)
+    test:plan(32)
+    local good = {
+        {2012, 12, 24, "20121224",                   8 },
+        {2012, 12, 24, "20121224  Foo bar",          8 },
+        {2012, 12, 24, "2012-12-24",                10 },
+        {2012, 12, 24, "2012-12-24 23:59:59",       10 },
+        {2012, 12, 24, "2012-12-24T00:00:00+00:00", 10 },
+        {2012, 12, 24, "2012359",                    7 },
+        {2012, 12, 24, "2012359T235959+0130",        7 },
+        {2012, 12, 24, "2012-359",                   8 },
+        {2012, 12, 24, "2012W521",                   8 },
+        {2012, 12, 24, "2012-W52-1",                10 },
+        {2012, 12, 24, "2012Q485",                   8 },
+        {2012, 12, 24, "2012-Q4-85",                10 },
+        {   1,  1,  1, "0001-Q1-01",                10 },
+        {   1,  1,  1, "0001-W01-1",                10 },
+        {   1,  1,  1, "0001-01-01",                10 },
+        {   1,  1,  1, "0001-001",                   8 },
+    }
+
+    for _, value in ipairs(good) do
+        local year, month, day, str, date_part_len
+        year, month, day, str, date_part_len = unpack(value)
+        local expected_date = date.new{year = year, month = month, day = day}
+        local date_part, len
+        date_part, len = date.parse_date(str)
+        test:is(len, date_part_len, ('%s: length check %d'):format(str, len))
+        test:is(expected_date, date_part, ('%s: expected date'):format(str))
+    end
+end)
+
+test:test("Parse iso date - invalid strings", function(test)
+    test:plan(31)
+    local bad = {
+        "20121232"   , -- Invalid day of month
+        "2012-12-310", -- Invalid day of month
+        "2012-13-24" , -- Invalid month
+        "2012367"    , -- Invalid day of year
+        "2012-000"   , -- Invalid day of year
+        "2012W533"   , -- Invalid week of year
+        "2012-W52-8" , -- Invalid day of week
+        "2012Q495"   , -- Invalid day of quarter
+        "2012-Q5-85" , -- Invalid quarter
+        "20123670"   , -- Trailing digit
+        "201212320"  , -- Trailing digit
+        "2012-12"    , -- Reduced accuracy
+        "2012-Q4"    , -- Reduced accuracy
+        "2012-Q42"   , -- Invalid
+        "2012-Q1-1"  , -- Invalid day of quarter
+        "2012Q--420" , -- Invalid
+        "2012-Q-420" , -- Invalid
+        "2012Q11"    , -- Incomplete
+        "2012Q1234"  , -- Trailing digit
+        "2012W12"    , -- Incomplete
+        "2012W1234"  , -- Trailing digit
+        "2012W-123"  , -- Invalid
+        "2012-W12"   , -- Incomplete
+        "2012-W12-12", -- Trailing digit
+        "2012U1234"  , -- Invalid
+        "2012-1234"  , -- Invalid
+        "2012-X1234" , -- Invalid
+        "0000-Q1-01" , -- Year less than 0001
+        "0000-W01-1" , -- Year less than 0001
+        "0000-01-01" , -- Year less than 0001
+        "0000-001"   , -- Year less than 0001
+    }
+
+    for _, str in ipairs(bad) do
+        assert_raises(test, invalid_date_fmt_error(str),
+                      function() date.parse_date(str) end)
+    end
+end)
+
+test:test("Parse tiny date into seconds and other parts", function(test)
+    test:plan(4)
+    local str = '19700101 00:00:30.528'
+    local tiny = date.parse(str)
+    test:is(tiny.epoch, 30, ("epoch of '%s'"):format(str))
+    test:is(tiny.nsec, 528000000, ("nsec of '%s'"):format(str))
+    test:is(tiny.sec, 30, "sec")
+    test:is(tiny.timestamp, 30.528, "timestamp")
 end)
 
 test:test("totable{}", function(test)

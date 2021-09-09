@@ -134,6 +134,55 @@ datetime_to_string(const struct datetime *date, char *buf, ssize_t len)
 	return sz;
 }
 
+bool
+datetime_parse_full(struct datetime *date, const char *str, size_t len,
+		    int32_t offset)
+{
+	size_t n;
+	dt_t dt;
+	char c;
+	int sec_of_day = 0, nanosecond = 0;
+
+	n = dt_parse_iso_date(str, len, &dt);
+	if (!n)
+		return false;
+	if (n == len)
+		goto exit;
+
+	c = str[n++];
+	if (!(c == 'T' || c == 't' || c == ' '))
+		return false;
+
+	str += n;
+	len -= n;
+
+	n = dt_parse_iso_time(str, len, &sec_of_day, &nanosecond);
+	if (!n)
+		return false;
+	if (n == len)
+		goto exit;
+
+	if (str[n] == ' ')
+		n++;
+
+	str += n;
+	len -= n;
+
+	n = dt_parse_iso_zone_lenient(str, len, &offset);
+	if (!n || n != len)
+		return false;
+
+exit:
+	date->epoch =
+		((int64_t)dt_rdn(dt) - DT_EPOCH_1970_OFFSET) * SECS_PER_DAY +
+		sec_of_day - offset * 60;
+	date->nsec = nanosecond;
+	date->tzoffset = offset;
+	date->tzindex = 0;
+
+	return true;
+}
+
 int
 datetime_compare(const struct datetime *lhs, const struct datetime *rhs)
 {
@@ -143,3 +192,4 @@ datetime_compare(const struct datetime *lhs, const struct datetime *rhs)
 
 	return COMPARE_RESULT(lhs->nsec, rhs->nsec);
 }
+

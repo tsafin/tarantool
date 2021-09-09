@@ -66,6 +66,8 @@ typedef enum {
 dt_t   tnt_dt_add_months   (dt_t dt, int delta, dt_adjust_t adjust);
 
 /* dt_parse_iso.h definitions */
+size_t tnt_dt_parse_iso_date (const char *str, size_t len, dt_t *dt);
+size_t tnt_dt_parse_iso_time (const char *str, size_t len, int *sod, int *nsec);
 size_t tnt_dt_parse_iso_zone_lenient(const char *str, size_t len, int *offset);
 
 /* Tarantool functions - datetime.c */
@@ -73,6 +75,8 @@ size_t tnt_datetime_to_string(const struct datetime * date, char *buf,
                               ssize_t len);
 size_t tnt_datetime_strftime(const struct datetime *date, char *buf,
                              uint32_t len, const char *fmt);
+bool   tnt_datetime_parse_full(struct datetime *date, const char *str,
+                               size_t len, int32_t offset);
 void   tnt_datetime_now(struct datetime *now);
 
 ]]
@@ -230,6 +234,13 @@ local function check_integer(v, message)
     if type(v) ~= 'number' or v % 1 ~= 0 then
         error(('%s: integer value expected, but received %s'):
               format(message, type(v)), 4)
+    end
+end
+
+local function check_str_or_nil(s, message)
+    if s ~= nil and type(s) ~= 'string' then
+        return error(("%s: expected string, but received %s"):
+                     format(message, type(s)), 2)
     end
 end
 
@@ -476,6 +487,9 @@ local function datetime_new_copy(obj)
 end
 
 local function datetime_new_dt(dt, secs, nanosecs, offset)
+    secs = secs or 0
+    nanosecs = nanosecs or 0
+    offset = offset or 0
     local epoch = (dt - DAYS_EPOCH_OFFSET) * SECS_PER_DAY
     return datetime_new_raw(epoch + secs - offset * 60, nanosecs, offset)
 end
@@ -865,6 +879,73 @@ local function datetime_interval_add(lhs, rhs)
 end
 
 --[[
+    Parse partial ISO-8601 date string
+
+    Accepetd formats are:
+
+    Basic      Extended
+    20121224   2012-12-24   Calendar date   (ISO 8601)
+    2012359    2012-359     Ordinal date    (ISO 8601)
+    2012W521   2012-W52-1   Week date       (ISO 8601)
+    2012Q485   2012-Q4-85   Quarter date
+
+    Returns pair of constructed datetime object, and length of string
+    which has been accepted by parser.
+]]
+local function datetime_parse_date(str)
+    check_str("datetime.parse_date()")
+    local dt = ffi.new('dt_t[1]')
+    local len = tonumber(builtin.tnt_dt_parse_iso_date(str, #str, dt))
+    if len == 0 then
+        error(('invalid date format %s'):format(str), 2)
+    end
+    return datetime_new_dt(dt[0]), len
+end
+
+--[[
+    datetime parse function for strings in extended iso-8601 format
+    assumes to deal with date T time time_zone at once
+       date [T] time [ ] time_zone
+    Returns constructed datetime object.
+]]
+local function datetime_parse_full(str, tzoffset)
+    check_str(str, "datetime.parse()")
+    local date = ffi.new(datetime_t)
+    local rc = builtin.tnt_datetime_parse_full(date, str, #str, tzoffset)
+    if rc == false then
+        error(("Could not parse '%s'"):format(str))
+    end
+    return date
+end
+
+local function datetime_parse_from(str, obj)
+    check_str(str, "datetime.parse()")
+    local fmt = ''
+    local offset
+
+    if obj ~= nil then
+        check_table(obj, "datetime.parse()")
+        fmt = obj.format
+        offset = obj.tzoffset
+    end
+    check_str_or_nil(fmt, "datetime.parse()")
+
+    if offset ~= nil then
+        offset = get_timezone(offset, 'tzoffset')
+        check_range(offset, -720, 840, 'tzoffset')
+    end
+    if obj and obj.tz ~= nil then
+        nyi('tz')
+    end
+
+    if fmt == '' or fmt == 'iso8601' or fmt == 'rfc3339' then
+        return datetime_parse_full(str, offset or 0)
+    else
+        error(("unknown format '%s'"):format(fmt), 2)
+    end
+end
+
+--[[
     Create datetime object representing current time using microseconds
     platform timer and local timezone information.
 ]]
@@ -1191,6 +1272,8 @@ return setmetatable(
         new         = datetime_new,
         interval    = setmetatable(interval_mt, interval_mt),
         now         = datetime_now,
+        parse       = datetime_parse_from,
+        parse_date  = datetime_parse_date,
         is_datetime = is_datetime,
     }, {}
 )

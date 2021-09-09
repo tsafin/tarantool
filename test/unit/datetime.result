@@ -1,4 +1,4 @@
-1..4
+1..5
     1..355
     ok 1 - correct parse_datetime return value for '2012-12-24 15:30Z'
     ok 2 - correct parse_datetime output seconds for '2012-12-24 15:30Z
@@ -373,6 +373,71 @@ ok 1 - subtests
     ok 14 - string '2013-10-28T17:51:56Z' expected, received '2013-10-28T17:51:56Z'
     ok 15 - string '9999-12-31T23:59:59Z' expected, received '9999-12-31T23:59:59Z'
 ok 2 - subtests
+    1..63
+    ok 1 - string '20121224' parse failed, len 8
+    ok 2 - string '20121224' parse failed, epoch 1356307200
+    ok 3 - string '20121224  Foo bar' parse failed, len 8
+    ok 4 - string '20121224  Foo bar' parse failed, epoch 1356307200
+    ok 5 - string '2012-12-24' parse failed, len 10
+    ok 6 - string '2012-12-24' parse failed, epoch 1356307200
+    ok 7 - string '2012-12-24 23:59:59' parse failed, len 10
+    ok 8 - string '2012-12-24 23:59:59' parse failed, epoch 1356307200
+    ok 9 - string '2012-12-24T00:00:00+00:00' parse failed, len 10
+    ok 10 - string '2012-12-24T00:00:00+00:00' parse failed, epoch 1356307200
+    ok 11 - string '2012359' parse failed, len 7
+    ok 12 - string '2012359' parse failed, epoch 1356307200
+    ok 13 - string '2012359T235959+0130' parse failed, len 7
+    ok 14 - string '2012359T235959+0130' parse failed, epoch 1356307200
+    ok 15 - string '2012-359' parse failed, len 8
+    ok 16 - string '2012-359' parse failed, epoch 1356307200
+    ok 17 - string '2012W521' parse failed, len 8
+    ok 18 - string '2012W521' parse failed, epoch 1356307200
+    ok 19 - string '2012-W52-1' parse failed, len 10
+    ok 20 - string '2012-W52-1' parse failed, epoch 1356307200
+    ok 21 - string '2012Q485' parse failed, len 8
+    ok 22 - string '2012Q485' parse failed, epoch 1356307200
+    ok 23 - string '2012-Q4-85' parse failed, len 10
+    ok 24 - string '2012-Q4-85' parse failed, epoch 1356307200
+    ok 25 - string '0001-Q1-01' parse failed, len 10
+    ok 26 - string '0001-Q1-01' parse failed, epoch -62135596800
+    ok 27 - string '0001-W01-1' parse failed, len 10
+    ok 28 - string '0001-W01-1' parse failed, epoch -62135596800
+    ok 29 - string '0001-01-01' parse failed, len 10
+    ok 30 - string '0001-01-01' parse failed, epoch -62135596800
+    ok 31 - string '0001-001' parse failed, len 8
+    ok 32 - string '0001-001' parse failed, epoch -62135596800
+    ok 33 - expected failure of string '20121232' parse, len 0
+    ok 34 - expected failure of string '2012-12-310' parse, len 0
+    ok 35 - expected failure of string '2012-13-24' parse, len 0
+    ok 36 - expected failure of string '2012367' parse, len 0
+    ok 37 - expected failure of string '2012-000' parse, len 0
+    ok 38 - expected failure of string '2012W533' parse, len 0
+    ok 39 - expected failure of string '2012-W52-8' parse, len 0
+    ok 40 - expected failure of string '2012Q495' parse, len 0
+    ok 41 - expected failure of string '2012-Q5-85' parse, len 0
+    ok 42 - expected failure of string '20123670' parse, len 0
+    ok 43 - expected failure of string '201212320' parse, len 0
+    ok 44 - expected failure of string '2012-12' parse, len 0
+    ok 45 - expected failure of string '2012-Q4' parse, len 0
+    ok 46 - expected failure of string '2012-Q42' parse, len 0
+    ok 47 - expected failure of string '2012-Q1-1' parse, len 0
+    ok 48 - expected failure of string '2012Q/* 420' parse, len 0
+    ok 49 - expected failure of string '2012-Q-420' parse, len 0
+    ok 50 - expected failure of string '2012Q11' parse, len 0
+    ok 51 - expected failure of string '2012Q1234' parse, len 0
+    ok 52 - expected failure of string '2012W12' parse, len 0
+    ok 53 - expected failure of string '2012W1234' parse, len 0
+    ok 54 - expected failure of string '2012W-123' parse, len 0
+    ok 55 - expected failure of string '2012-W12' parse, len 0
+    ok 56 - expected failure of string '2012-W12-12' parse, len 0
+    ok 57 - expected failure of string '2012U1234' parse, len 0
+    ok 58 - expected failure of string '2012-1234' parse, len 0
+    ok 59 - expected failure of string '2012-X1234' parse, len 0
+    ok 60 - expected failure of string '0000-Q1-01' parse, len 0
+    ok 61 - expected failure of string '0000-W01-1' parse, len 0
+    ok 62 - expected failure of string '0000-01-01' parse, len 0
+    ok 63 - expected failure of string '0000-001' parse, len 0
+ok 3 - subtests
     1..85
     ok 1 - len 18, expected len 18
     ok 2 - tnt_mp_sizeof_datetime(18) == encoded length 18
@@ -459,7 +524,7 @@ ok 2 - subtests
     ok 83 - mp_decode_datetime() return code
     ok 84 - data1 == end (0)
     ok 85 - datetime_compare(&date, &ret)
-ok 3 - subtests
+ok 4 - subtests
     1..5
 	*** mp_print_test ***
     ok 1 - correct mp_snprint size 20 with empty buffer
@@ -468,4 +533,4 @@ ok 3 - subtests
     ok 4 - correct mp_fprint size 20
     ok 5 - correct mp_fprint result 20
 	*** mp_print_test: done ***
-ok 4 - subtests
+ok 5 - subtests
