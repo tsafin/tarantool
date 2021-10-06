@@ -117,6 +117,17 @@ datetime_to_tm(const struct datetime *date, struct tnt_tm *tm);
 bool
 datetime_parse_full(struct datetime *date, const char *str, size_t len,
 		   int32_t offset);
+/**
+ * Parse buffer given format, and construct datetime value
+ * @param date output datetime value
+ * @param buf input text buffer (0-terminated)
+ * @param fmt format to use for parsing
+ * @retval Upon successful completion returns a pointer to the character
+ *         following the last character parsed. Otherwise NULL
+ * @sa strptime()
+ */
+char *
+datetime_strptime(struct datetime *date, const char *buf, const char *fmt);
 
 #if defined(__cplusplus)
 } /* extern "C" */

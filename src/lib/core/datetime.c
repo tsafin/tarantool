@@ -68,6 +68,30 @@ datetime_strftime(const struct datetime *date, char *buf, size_t len,
 }
 
 void
+tm_to_datetime(struct tnt_tm *tm, struct datetime *date)
+{
+	assert(tm->tm_mday > 0 && tm->tm_mday < 32);
+	assert(tm->tm_mon >= 0 && tm->tm_mon <= 11);
+	dt_t dt = dt_from_ymd(tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday);
+	int64_t local_secs =
+		(int64_t)dt * SECS_PER_DAY - SECS_EPOCH_1970_OFFSET;
+	local_secs += tm->tm_hour * 3600 + tm->tm_min * 60 + tm->tm_sec;
+	date->epoch = local_secs - tm->tm_gmtoff;
+	date->nsec = tm->tm_nsec;
+	date->tzindex = 0;
+	date->tzoffset = tm->tm_gmtoff / 60;
+}
+
+char *
+datetime_strptime(struct datetime *date, const char *buf, const char *fmt)
+{
+	struct tnt_tm t = { .tm_epoch = 0 };
+	char * ret = tnt_strptime(buf, fmt, &t);
+	tm_to_datetime(&t, date);
+	return ret;
+}
+
+void
 datetime_now(struct datetime *now)
 {
 	struct timeval tv;

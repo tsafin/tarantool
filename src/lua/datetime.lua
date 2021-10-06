@@ -77,6 +77,8 @@ size_t tnt_datetime_strftime(const struct datetime *date, char *buf,
                              uint32_t len, const char *fmt);
 bool   tnt_datetime_parse_full(struct datetime *date, const char *str,
                                size_t len, int32_t offset);
+char * tnt_datetime_strptime(struct datetime *date, const char *buf,
+                             const char *fmt);
 void   tnt_datetime_now(struct datetime *now);
 
 ]]
@@ -918,6 +920,18 @@ local function datetime_parse_full(str, tzoffset)
     return date
 end
 
+--[[
+    Parse datetime string given `strptime` like format
+]]
+local function datetime_parse_format(str, fmt)
+    local date = ffi.new(datetime_t)
+    local res = builtin.tnt_datetime_strptime(date, str, fmt)
+    if res == box.NULL then
+        error(("Could not parse '%s' using '%s' format"):format(str, fmt))
+    end
+    return date
+end
+
 local function datetime_parse_from(str, obj)
     check_str(str, "datetime.parse()")
     local fmt = ''
@@ -941,7 +955,7 @@ local function datetime_parse_from(str, obj)
     if fmt == '' or fmt == 'iso8601' or fmt == 'rfc3339' then
         return datetime_parse_full(str, offset or 0)
     else
-        error(("unknown format '%s'"):format(fmt), 2)
+        return datetime_parse_format(str, fmt)
     end
 end
 

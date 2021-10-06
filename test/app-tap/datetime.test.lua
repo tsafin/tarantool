@@ -11,7 +11,7 @@ local ffi = require('ffi')
 --]]
 if jit.arch == 'arm64' then jit.off() end
 
-test:plan(27)
+test:plan(28)
 
 -- minimum supported date - -5879610-06-22
 local MIN_DATE_YEAR = -5879610
@@ -1283,6 +1283,43 @@ test:test("Parse tiny date into seconds and other parts", function(test)
     test:is(tiny.nsec, 528000000, ("nsec of '%s'"):format(str))
     test:is(tiny.sec, 30, "sec")
     test:is(tiny.timestamp, 30.528, "timestamp")
+end)
+
+test:test("Parse strptime format", function(test)
+    test:plan(16)
+    local formats = {
+        {'Thu Jan  1 03:00:00 1970',    '%c',       '1970-01-01T03:00:00Z'},
+        {'01/01/70',                    '%D',       '1970-01-01T00:00:00Z'},
+        {'01/01/70',                    '%m/%d/%y', '1970-01-01T00:00:00Z' },
+        {'Thu Jan  1 03:00:00 1970',    '%Ec',      '1970-01-01T03:00:00Z' },
+        {'1970-01-01',                  '%F',       '1970-01-01T00:00:00Z' },
+        {'1970-01-01',                  '%Y-%m-%d', '1970-01-01T00:00:00Z' },
+        -- {' 1-Jan-1970',                 '%v' },
+        {' 1-Jan-1970',                 '%e-%b-%Y', '1970-01-01T00:00:00Z' },
+        {'01/01/70',                    '%x',       '1970-01-01T00:00:00Z' },
+        {'1970-01-01T0300+0300',        '%Y-%m-%dT%H%M%z',
+            '1970-01-01T03:00:00+0300' },
+        {'1970-01-01T03:00:00+0300',    '%Y-%m-%dT%H:%M:%S%z',
+            '1970-01-01T03:00:00+0300' },
+        {'1970-01-01T03:00:00.125000000+0300',  '%Y-%m-%dT%H:%M:%S.%f%z',
+            '1970-01-01T03:00:00.125+0300' },
+        {'1970-01-01T03:00:00.125+0300',        '%Y-%m-%dT%H:%M:%S.%f%z',
+            '1970-01-01T03:00:00.125+0300' },
+        {'1970-01-01T03:00:00.125',             '%Y-%m-%dT%H:%M:%S.%f',
+            '1970-01-01T03:00:00.125Z' },
+        {'1970-01-01T03:00:00.125',             '%FT%T.%f',
+            '1970-01-01T03:00:00.125Z' },
+        {'1970-01-01T03:00:00.125+0300',        '%FT%T.%f%z',
+            '1970-01-01T03:00:00.125+0300' },
+        {'1970-01-01T03:00:00.125000000+0300',  '%FT%T.%f%z',
+            '1970-01-01T03:00:00.125+0300' },
+    }
+    for _, row in pairs(formats) do
+        local str, fmt, exp = unpack(row)
+        print(str, fmt)
+        local dt = date.parse(str, {format = fmt})
+        test:is(tostring(dt), exp, ('parse %s via %s'):format(str, fmt))
+    end
 end)
 
 test:test("totable{}", function(test)
