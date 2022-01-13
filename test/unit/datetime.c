@@ -105,9 +105,9 @@ datetime_test(void)
 
 	for (index = 0; index < lengthof(tests); index++) {
 		struct datetime date;
-		bool rc = datetime_parse_full(&date, tests[index].str,
-					      tests[index].len, 0);
-		is(rc, true, "correct parse_datetime return value for '%s'",
+		size_t len = datetime_parse_full(&date, tests[index].str,
+					         tests[index].len, 0);
+		is(len > 0, true, "correct parse_datetime return value for '%s'",
 		   tests[index].str);
 		is(date.epoch, date_expected.epoch,
 		   "correct parse_datetime output "
@@ -120,12 +120,11 @@ datetime_test(void)
 		 */
 		static char buff[DT_TO_STRING_BUFSIZE];
 		struct tnt_tm tm = { .tm_sec = 0 };
-		size_t len =
-			datetime_strftime(&date, buff, sizeof(buff), "%F %T%z");
+		len = datetime_strftime(&date, buff, sizeof(buff), "%F %T%z");
 		ok(len > 0, "strftime");
 		struct datetime date_parsed;
-		rc = datetime_parse_full(&date_parsed, buff, len, 0);
-		is(rc, true, "correct parse_datetime return value for '%s'",
+		len = datetime_parse_full(&date_parsed, buff, len, 0);
+		is(len > 0, true, "correct parse_datetime return value for '%s'",
 		   buff);
 		is(date.epoch, date_parsed.epoch,
 		   "reversible seconds via strftime for '%s'", buff);

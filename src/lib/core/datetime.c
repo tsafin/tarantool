@@ -158,31 +158,32 @@ datetime_to_string(const struct datetime *date, char *buf, ssize_t len)
 	return sz;
 }
 
-bool
+size_t
 datetime_parse_full(struct datetime *date, const char *str, size_t len,
 		    int32_t offset)
 {
 	size_t n;
 	dt_t dt;
+	const char *svp = str;
 	char c;
 	int sec_of_day = 0, nanosecond = 0;
 
 	n = dt_parse_iso_date(str, len, &dt);
-	if (!n)
-		return false;
+	if (n == 0)
+		return 0;
 	if (n == len)
 		goto exit;
 
 	c = str[n++];
-	if (!(c == 'T' || c == 't' || c == ' '))
-		return false;
+	if (c != 'T' && c != 't' && c != ' ')
+		return 0;
 
 	str += n;
 	len -= n;
 
 	n = dt_parse_iso_time(str, len, &sec_of_day, &nanosecond);
-	if (!n)
-		return false;
+	if (n == 0)
+		return 0;
 	if (n == len)
 		goto exit;
 
@@ -193,8 +194,9 @@ datetime_parse_full(struct datetime *date, const char *str, size_t len,
 	len -= n;
 
 	n = dt_parse_iso_zone_lenient(str, len, &offset);
-	if (!n || n != len)
-		return false;
+	if (n == 0 || n != len)
+		return 0;
+	str += n;
 
 exit:
 	date->epoch =
@@ -204,7 +206,7 @@ exit:
 	date->tzoffset = offset;
 	date->tzindex = 0;
 
-	return true;
+	return (str - svp);
 }
 
 int
