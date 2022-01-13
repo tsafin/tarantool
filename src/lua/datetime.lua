@@ -67,7 +67,6 @@ dt_t   tnt_dt_add_months   (dt_t dt, int delta, dt_adjust_t adjust);
 
 /* dt_parse_iso.h definitions */
 size_t tnt_dt_parse_iso_date (const char *str, size_t len, dt_t *dt);
-size_t tnt_dt_parse_iso_time (const char *str, size_t len, int *sod, int *nsec);
 size_t tnt_dt_parse_iso_zone_lenient(const char *str, size_t len, int *offset);
 
 /* Tarantool functions - datetime.c */
