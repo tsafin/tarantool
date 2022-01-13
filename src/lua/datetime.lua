@@ -951,7 +951,7 @@ local function datetime_parse_from(str, obj)
         nyi('tz')
     end
 
-    if fmt == '' or fmt == 'iso8601' or fmt == 'rfc3339' then
+    if not fmt or fmt == '' or fmt == 'iso8601' or fmt == 'rfc3339' then
         return datetime_parse_full(str, offset or 0)
     else
         return datetime_parse_format(str, fmt)
