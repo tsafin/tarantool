@@ -1,5 +1,6 @@
 #include "dt.h"
 #include <assert.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <string.h>
 #include <time.h>
@@ -220,8 +221,8 @@ parse_date_test(void)
 		int64_t epoch = _dt_to_epoch(dt);
 		is(len, expected_len, "string '%s' parse failed, len %lu", str,
 		   len);
-		is(epoch, expected_epoch, "string '%s' parse failed, epoch %ld",
-		   str, epoch);
+		is(epoch, expected_epoch,
+		   "string '%s' parse failed, epoch %" PRId64, str, epoch);
 	}
 
 	const char * invalid_tests[] = {
