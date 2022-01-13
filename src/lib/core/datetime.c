@@ -218,4 +218,3 @@ datetime_compare(const struct datetime *lhs, const struct datetime *rhs)
 
 	return COMPARE_RESULT(lhs->nsec, rhs->nsec);
 }
-
