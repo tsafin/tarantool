@@ -894,7 +894,7 @@ end
     which has been accepted by parser.
 ]]
 local function datetime_parse_date(str)
-    check_str("datetime.parse_date()")
+    check_str(str, "datetime.parse_date()")
     local dt = ffi.new('dt_t[1]')
     local len = tonumber(builtin.tnt_dt_parse_iso_date(str, #str, dt))
     if len == 0 then
