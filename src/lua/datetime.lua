@@ -882,7 +882,7 @@ end
 --[[
     Parse partial ISO-8601 date string
 
-    Accepetd formats are:
+    Accepted formats are:
 
     Basic      Extended
     20121224   2012-12-24   Calendar date   (ISO 8601)
