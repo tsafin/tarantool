@@ -34,7 +34,7 @@ tnt_datetime_to_string(const struct datetime *date, char *buf, ssize_t len)
 
 size_t
 tnt_datetime_parse_full(struct datetime *date, const char *str, size_t len,
-		    int32_t offset)
+			int32_t offset)
 {
 	return datetime_parse_full(date, str, len, offset);
 }
