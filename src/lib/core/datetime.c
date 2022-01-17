@@ -60,8 +60,9 @@ datetime_to_tm(const struct datetime *date, struct tnt_tm *tm)
 
 size_t
 datetime_strftime(const struct datetime *date, char *buf, size_t len,
-		      const char *fmt)
+		  const char *fmt)
 {
+	assert(date != NULL);
 	struct tnt_tm tm;
 	datetime_to_tm(date, &tm);
 	return tnt_strftime(buf, len, fmt, &tm);
@@ -87,7 +88,8 @@ datetime_strptime(struct datetime *date, const char *buf, const char *fmt)
 {
 	struct tnt_tm t = { .tm_epoch = 0 };
 	char * ret = tnt_strptime(buf, fmt, &t);
-	tm_to_datetime(&t, date);
+	if (ret != NULL)
+		tm_to_datetime(&t, date);
 	return ret;
 }
 
