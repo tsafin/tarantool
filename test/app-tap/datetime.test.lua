@@ -1219,7 +1219,7 @@ test:test("Matrix of allowed time and interval subtractions", function(test)
     test:is(catchsub_status(min_date, new_ival{week = 100}), false, "min - 100wk")
 end)
 
-test:test("Parse iso date - valid strings", function(test)
+test:test("Parse iso8601 date - valid strings", function(test)
     test:plan(32)
     local good = {
         {2012, 12, 24, "20121224",                   8 },
@@ -1251,7 +1251,7 @@ test:test("Parse iso date - valid strings", function(test)
     end
 end)
 
-test:test("Parse iso date - invalid strings", function(test)
+test:test("Parse iso8601 date - invalid strings", function(test)
     test:plan(31)
     local bad = {
         "20121232"   , -- Invalid day of month
