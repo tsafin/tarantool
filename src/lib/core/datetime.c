@@ -78,7 +78,7 @@ tm_to_datetime(struct tnt_tm *tm, struct datetime *date)
 	int mday = tm->tm_mday;
 	int yday = tm->tm_yday;
 	int wday = tm->tm_wday;
-	dt_t dt;
+	dt_t dt = 0;
 
 	if ((year | mon | mday) == 0) {
 		if (yday != 0) {
