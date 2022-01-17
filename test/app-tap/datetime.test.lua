@@ -526,13 +526,13 @@ local strftime_formats = {
     { '%B',                      1, 'January' },
     { '%b',                      1, 'Jan' },
     { '%h',                      1, 'Jan' },
-    { '%C',                      1, '19' },
+    { '%C',                      0, '19' },
     { '%c',                      1, 'Thu Jan  1 03:00:00 1970' },
     { '%D',                      1, '01/01/70' },
     { '%m/%d/%y',                1, '01/01/70' },
     { '%d',                      1, '01' },
     { '%Ec',                     1, 'Thu Jan  1 03:00:00 1970' },
-    { '%EC',                     1, '19' },
+    { '%EC',                     0, '19' },
     { '%Ex',                     1, '01/01/70' },
     { '%EX',                     1, '03:00:00' },
     { '%Ey',                     1, '70' },
@@ -579,9 +579,9 @@ local strftime_formats = {
     { '%U',                      1, '00' },
     { '%u',                      1, '4' },
     { '%V',                      0, '01' },
-    { '%G',                      0, '1970' },
-    { '%g',                      0, '70' },
-    { '%v',                      0, ' 1-Jan-1970' },
+    { '%G',                      1, '1970' },
+    { '%g',                      1, '70' },
+    { '%v',                      1, ' 1-Jan-1970' },
     { '%e-%b-%Y',                1, ' 1-Jan-1970' },
     { '%W',                      1, '00' },
     { '%w',                      1, '4' },
@@ -591,12 +591,12 @@ local strftime_formats = {
     { '%Y',                      1, '1970' },
     { '%z',                      1, '+0300' },
     { '%%',                      1, '%' },
-    { '%Y-%m-%dT%H:%M:%S.%9f%z', 0, '1970-01-01T03:00:00.125000000+0300' },
+    { '%Y-%m-%dT%H:%M:%S.%9f%z', 1, '1970-01-01T03:00:00.125000000+0300' },
     { '%Y-%m-%dT%H:%M:%S.%f%z',  1, '1970-01-01T03:00:00.125+0300' },
     { '%Y-%m-%dT%H:%M:%S.%f',    1, '1970-01-01T03:00:00.125' },
     { '%FT%T.%f',                1, '1970-01-01T03:00:00.125' },
     { '%FT%T.%f%z',              1, '1970-01-01T03:00:00.125+0300' },
-    { '%FT%T.%9f%z',             0, '1970-01-01T03:00:00.125000000+0300' },
+    { '%FT%T.%9f%z',             1, '1970-01-01T03:00:00.125000000+0300' },
 }
 
 test:test("Datetime string formatting detailed", function(test)
@@ -613,7 +613,7 @@ test:test("Datetime string formatting detailed", function(test)
 end)
 
 test:test("Datetime string parsing by format (detailed)", function(test)
-    test:plan(1)
+    test:plan(68)
     local T = date.new{ timestamp = 0.125 }
     T:set{ tzoffset = 180 }
     test:is(tostring(T), '1970-01-01T03:00:00.125+0300', 'tostring()')
@@ -622,10 +622,8 @@ test:test("Datetime string parsing by format (detailed)", function(test)
         local fmt, check, value = unpack(row)
         if check > 0 then
             local res = date.parse(value, {format = fmt})
-            print(res)
+            test:is(res ~= nil, true, ('parse of %s'):format(fmt))
         end
-        -- test:is(T:format(fmt), value,
-        --        ('format %s, expected %s'):format(fmt, value))
     end
 end)
 
@@ -1334,7 +1332,6 @@ test:test("Parse strptime format", function(test)
     }
     for _, row in pairs(formats) do
         local str, fmt, exp = unpack(row)
-        print(str, fmt)
         local dt = date.parse(str, {format = fmt})
         test:is(tostring(dt), exp, ('parse %s via %s'):format(str, fmt))
     end

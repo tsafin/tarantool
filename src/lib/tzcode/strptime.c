@@ -48,6 +48,7 @@ static char sccsid[] __attribute__((unused)) =
 #endif /* !defined NOID */
 #endif /* not lint */
 
+#include <assert.h>
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
@@ -174,6 +175,13 @@ tnt_strptime(const char *__restrict buf, const char *__restrict fmt,
 			Oalternative++;
 			goto label;
 
+		case 'v':
+			buf = tnt_strptime(buf, "%e-%b-%Y", tm);
+			if (buf == NULL)
+				return (NULL);
+			flags |= FLAG_MONTH | FLAG_MDAY | FLAG_YEAR;
+			break;
+
 		case 'F':
 			buf = tnt_strptime(buf, "%Y-%m-%d", tm);
 			if (buf == NULL)
@@ -231,6 +239,22 @@ tnt_strptime(const char *__restrict buf, const char *__restrict fmt,
 
 			break;
 
+		case '0':
+		case '1':
+		case '2':
+		case '3':
+		case '4':
+		case '5':
+		case '6':
+		case '7':
+		case '8':
+		case '9':
+			for (; *ptr != 0 && is_digit((u_char)*ptr); ptr++)
+				;
+
+			c = *ptr++;
+			assert(c == 'f');
+			/* fallthru */
 		case 'f':
 			if (!is_digit((u_char)*buf))
 				return (NULL);
@@ -518,6 +542,8 @@ tnt_strptime(const char *__restrict buf, const char *__restrict fmt,
 			flags |= FLAG_EPOCH;
 		} break;
 
+		case 'G': /* ISO 8601 year (four digits) */
+		case 'g': /* ISO 8601 year (two digits) */
 		case 'Y':
 		case 'y':
 			if (*buf == 0 || isspace((u_char)*buf))
@@ -526,14 +552,14 @@ tnt_strptime(const char *__restrict buf, const char *__restrict fmt,
 			if (!is_digit((u_char)*buf))
 				return (NULL);
 
-			len = (c == 'Y') ? 4 : 2;
+			len = (c == 'Y' || c == 'G') ? 4 : 2;
 			for (i = 0; len && *buf != 0 && is_digit((u_char)*buf);
 			     buf++) {
 				i *= 10;
 				i += *buf - '0';
 				len--;
 			}
-			if (c == 'Y')
+			if (c == 'Y' || c == 'G')
 				century = i / 100;
 			year = i % 100;
 
