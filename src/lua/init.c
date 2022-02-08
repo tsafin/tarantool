@@ -35,6 +35,7 @@
 #include <libgen.h>
 #endif
 
+#include <assert.h>
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -422,6 +423,61 @@ static const char *lua_modules_preload[] = {
  * {{{ box Lua library: common functions
  */
 
+/*
+ * Retrieve builtin module sources, if available.
+ */
+static const char *
+tarantool_debug_getsources(const char *modname)
+{
+	for (size_t i = 0; lua_modules[i] != NULL; i += 2) {
+		const char *shortname = lua_modules[i];
+		const char *lua_code = lua_modules[i + 1];
+		assert(lua_code != NULL);
+		char fullname[48];
+		snprintf(fullname, sizeof(fullname), "@builtin/%s.lua",
+			 shortname);
+		if (!strcmp(shortname, modname) || !strcmp(fullname, modname))
+			return lua_code;
+	}
+	return NULL;
+}
+
+/*
+ * LuaC implementation of a function to retrieve builtin module sources.
+ */
+static int
+lbox_tarantool_debug_getsources(struct lua_State *L)
+{
+	int index = lua_gettop(L);
+	if (index != 1) {
+		lua_pushstring(L, "getsources() function expects "
+			       "one argument");
+		lua_error(L);
+	}
+	size_t len = 0;
+	const char *modname = luaL_checklstring(L, index, &len);
+	if (len <= 0)
+		goto ret_nil;
+	const char *code = tarantool_debug_getsources(modname);
+	if (code == NULL)
+		goto ret_nil;
+	lua_pushstring(L, code);
+	return 1;
+ret_nil:
+	lua_pushnil(L);
+	return 1;
+}
+
+void
+tarantool_lua_debug_init(struct lua_State *L)
+{
+	static const struct luaL_Reg initlib[] = {
+		{"getsources", lbox_tarantool_debug_getsources},
+		{NULL, NULL}
+	};
+	luaL_register_module(L, "tarantool.debug", initlib);
+}
+
 /**
  * Convert lua number or string to lua cdata 64bit number.
  */
@@ -805,6 +861,7 @@ tarantool_lua_init(const char *tarantool_bin, int argc, char **argv)
 
 	luaopen_tarantool(L);
 	lua_pop(L, 1);
+	tarantool_lua_debug_init(L);
 
 	lua_newtable(L);
 	lua_pushinteger(L, -1);
