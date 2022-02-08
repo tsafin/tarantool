@@ -35,6 +35,7 @@
 #include <libgen.h>
 #endif
 
+#include <assert.h>
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -422,6 +423,51 @@ static const char *lua_modules_preload[] = {
  * {{{ box Lua library: common functions
  */
 
+/*
+ * Retrieve builtin module sources, if available.
+ */
+static const char *
+tarantool_builtin_module(const char *modname)
+{
+	for (size_t i = 0; lua_modules[i] != NULL; i += 2) {
+		const char *shortname = lua_modules[i];
+		const char *lua_code = lua_modules[i + 1];
+		assert(lua_code != NULL);
+		char fullname[48];
+		snprintf(fullname, sizeof(fullname), "@builtin/%s.lua",
+			 shortname);
+		if (!strcmp(shortname, modname) || !strcmp(fullname, modname))
+			return lua_code;
+	}
+	return NULL;
+}
+
+/*
+ * LuaC implementation of a function to retrieve builtin module sources.
+ */
+static int
+lbox_tarantool_builtin_module(struct lua_State *L)
+{
+	int index = lua_gettop(L);
+	if (index != 1) {
+		lua_pushstring(L, "tarantool_builtin_module() function expects"
+				" one argument");
+		lua_error(L);
+	}
+	size_t len = 0;
+	const char *modname = luaL_checklstring(L, index, &len);
+	if (len <= 0)
+		goto ret_nil;
+	const char *code = tarantool_builtin_module(modname);
+	if (code == NULL)
+		goto ret_nil;
+	lua_pushstring(L, code);
+	return 1;
+ret_nil:
+	lua_pushnil(L);
+	return 1;
+}
+
 /**
  * Convert lua number or string to lua cdata 64bit number.
  */
@@ -722,6 +768,8 @@ tarantool_lua_init(const char *tarantool_bin, int argc, char **argv)
 	luaL_loadstring(L, "return require('ffi')");
 	lua_call(L, 0, 0);
 	lua_register(L, "tonumber64", lbox_tonumber64);
+	lua_register(L, "tarantool_builtin_module",
+		     lbox_tarantool_builtin_module);
 
 	tarantool_lua_uri_init(L);
 	tarantool_lua_utf8_init(L);

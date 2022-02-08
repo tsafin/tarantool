@@ -268,30 +268,47 @@ local function where(info, context_lines)
     local source = SOURCE_CACHE[filesource]
     if not source then
         source = {}
-        -- external module - load file
-        local filename = filesource:match("@(.*)")
-        if filename then
+        -- Tarantool builtin module
+        if filesource:match("@builtin/.*.lua") then
             pcall(function()
-                for line in io.lines(filename) do
+                local lua_code = tarantool_builtin_module(filesource)
+
+                for line in string.gmatch(lua_code, "([^\n]*)\n?") do
                     table.insert(source, line)
                 end
             end)
-        elseif filesource then
-            for line in filesource:gmatch("(.-)\n") do
-                table.insert(source, line)
+        else
+        -- external module - load file
+            local filename = filesource:match("@(.*)")
+            if filename then
+                pcall(function()
+                    for line in io.lines(filename) do
+                        table.insert(source, line)
+                    end
+                end)
+            elseif filesource then
+                for line in filesource:gmatch("(.-)\n") do
+                    table.insert(source, line)
+                end
             end
         end
         SOURCE_CACHE[info.source] = source
     end
 
     if source and source[info.currentline] then
-        for i = info.currentline - context_lines, info.currentline + context_lines do
-            local tab_or_caret = (i == info.currentline and GREEN_CARET or "    ")
+        for i = info.currentline - context_lines,
+                info.currentline + context_lines do
+            local tab_or_caret = (i == info.currentline and GREEN_CARET or
+                                  "    ")
             local line = source[i]
-            if line then dbg_writeln(COLOR_GRAY .. "% 4d" .. tab_or_caret .. "%s", i, line) end
+            if line then
+                dbg_writeln(COLOR_GRAY .. "% 4d" .. tab_or_caret .. "%s", i,
+                            line)
+            end
         end
     else
-        dbg_writeln(COLOR_RED .. "Error: Source not available for " .. COLOR_BLUE .. info.short_src);
+        dbg_writeln(COLOR_RED .. "Error: Source not available for " ..
+                    COLOR_BLUE .. info.short_src)
     end
 
     return false
