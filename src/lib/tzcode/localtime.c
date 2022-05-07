@@ -15,8 +15,8 @@
 #include <unistd.h>
 #define LOCALTIME_IMPLEMENTATION
 #include "private.h"
+#include "tzcode.h"
 
-#include "tzfile.h"
 #include <fcntl.h>
 
 #if defined THREAD_SAFE && THREAD_SAFE
@@ -92,8 +92,6 @@ unlock(void)
 
 static const char wildabbr[] = WILDABBR;
 
-static const char gmt[] = "GMT";
-
 /*
 ** The DST rules to use if TZ has no rules and we can't load TZDEFRULES.
 ** Default to US rules as of 2017-05-07.
@@ -104,57 +102,6 @@ static const char gmt[] = "GMT";
 #define TZDEFRULESTRING ",M3.2.0,M11.1.0"
 #endif
 
-struct ttinfo { /* time type information */
-	int_fast32_t tt_utoff; /* UT offset in seconds */
-	bool tt_isdst; /* used to set tm_isdst */
-	int tt_desigidx; /* abbreviation list index */
-	bool tt_ttisstd; /* transition is std time */
-	bool tt_ttisut; /* transition is UT */
-};
-
-struct lsinfo { /* leap second information */
-	time_t ls_trans; /* transition time */
-	int_fast32_t ls_corr; /* correction to apply */
-};
-
-#define SMALLEST(a, b) (((a) < (b)) ? (a) : (b))
-#define BIGGEST(a, b) (((a) > (b)) ? (a) : (b))
-
-/* This abbreviation means local time is unspecified.  */
-static char const UNSPEC[] = "-00";
-
-/* How many extra bytes are needed at the end of struct state's chars array.
-   This needs to be at least 1 for null termination in case the input
-   data isn't properly terminated, and it also needs to be big enough
-   for ttunspecified to work without crashing.  */
-enum { CHARS_EXTRA = BIGGEST(sizeof UNSPEC, 2) - 1 };
-
-#ifdef TZNAME_MAX
-#define MY_TZNAME_MAX TZNAME_MAX
-#endif /* defined TZNAME_MAX */
-#ifndef TZNAME_MAX
-#define MY_TZNAME_MAX 255
-#endif /* !defined TZNAME_MAX */
-
-struct state {
-	int leapcnt;
-	int timecnt;
-	int typecnt;
-	int charcnt;
-	bool goback;
-	bool goahead;
-	time_t ats[TZ_MAX_TIMES];
-	unsigned char types[TZ_MAX_TIMES];
-	struct ttinfo ttis[TZ_MAX_TYPES];
-	char chars[BIGGEST(BIGGEST(TZ_MAX_CHARS + CHARS_EXTRA, sizeof gmt),
-			   (2 * (MY_TZNAME_MAX + 1)))];
-	struct lsinfo lsis[TZ_MAX_LEAPS];
-
-	/* The time type to use for early times or if no transitions.
-	   It is always zero for recent tzdb releases.
-	   It might be nonzero for data from tzdb 2018e or earlier.  */
-	int defaulttype;
-};
 
 enum r_type {
 	JULIAN_DAY, /* Jn = Julian day */
