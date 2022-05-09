@@ -1,4 +1,4 @@
-/* Convert timestamp from time_t to struct tm.  */
+/* Convert timestamp from time_t to struct tnt_tm.  */
 
 /*
 ** This file is in the public domain, so clarified as of
@@ -90,7 +90,9 @@ unlock(void)
 #define WILDABBR "   "
 #endif /* !defined WILDABBR */
 
+#if defined(HAVE_TZNAME) || defined(TM_ZONE)
 static const char wildabbr[] = WILDABBR;
+#endif
 
 /*
 ** The DST rules to use if TZ has no rules and we can't load TZDEFRULES.
@@ -117,8 +119,8 @@ struct rule {
 	int_fast32_t r_time; /* transition time of rule */
 };
 
-static struct tm *
-gmtsub(struct state const *, time_t const *, int_fast32_t, struct tm *);
+static struct tnt_tm *
+gmtsub(struct state const *, time_t const *, int_fast32_t, struct tnt_tm *);
 static bool
 increment_overflow(int *, int);
 static bool
@@ -127,8 +129,8 @@ static int_fast32_t
 leapcorr(struct state const *, time_t);
 static bool
 normalize_overflow32(int_fast32_t *, int *, int);
-static struct tm *
-timesub(time_t const *, int_fast32_t, struct state const *, struct tm *);
+static struct tnt_tm *
+timesub(time_t const *, int_fast32_t, struct state const *, struct tnt_tm *);
 static bool
 typesequiv(struct state const *, int, int);
 static bool
@@ -161,7 +163,7 @@ static int lcl_is_set;
 ** Thanks to Paul Eggert for noting this.
 */
 
-static struct tm tm;
+static struct tnt_tm tm;
 
 #if 2 <= HAVE_TZNAME + TZ_TIME_T
 char *tzname[2] = { (char *)wildabbr, (char *)wildabbr };
@@ -1497,13 +1499,13 @@ tzfree(timezone_t sp)
 */
 
 /*ARGSUSED*/
-static struct tm *
+static struct tnt_tm *
 localsub(struct state const *sp, time_t const *timep, int_fast32_t setname,
-	 struct tm *const tmp)
+	 struct tnt_tm *const tmp)
 {
 	const struct ttinfo *ttisp;
 	int i;
-	struct tm *result;
+	struct tnt_tm *result;
 	const time_t t = *timep;
 
 	if (sp == NULL) {
@@ -1587,16 +1589,16 @@ localsub(struct state const *sp, time_t const *timep, int_fast32_t setname,
 
 #if NETBSD_INSPIRED
 
-struct tm *
-localtime_rz(struct state *sp, time_t const *timep, struct tm *tmp)
+struct tnt_tm *
+localtime_rz(struct state *sp, time_t const *timep, struct tnt_tm *tmp)
 {
 	return localsub(sp, timep, 0, tmp);
 }
 
 #endif
 
-static struct tm *
-localtime_tzset(time_t const *timep, struct tm *tmp, bool setname)
+static struct tnt_tm *
+localtime_tzset(time_t const *timep, struct tnt_tm *tmp, bool setname)
 {
 	int err = lock();
 	if (err) {
@@ -1610,14 +1612,14 @@ localtime_tzset(time_t const *timep, struct tm *tmp, bool setname)
 	return tmp;
 }
 
-struct tm *
-localtime(const time_t *timep)
+struct tnt_tm *
+tnt_localtime(const time_t *timep)
 {
 	return localtime_tzset(timep, &tm, true);
 }
 
-struct tm *
-localtime_r(const time_t *timep, struct tm *tmp)
+struct tnt_tm *
+tnt_localtime_r(const time_t *timep, struct tnt_tm *tmp)
 {
 	return localtime_tzset(timep, tmp, false);
 }
@@ -1626,11 +1628,11 @@ localtime_r(const time_t *timep, struct tm *tmp)
 ** gmtsub is to gmtime as localsub is to localtime.
 */
 
-static struct tm *
+static struct tnt_tm *
 gmtsub(struct state const *sp, time_t const *timep, int_fast32_t offset,
-       struct tm *tmp)
+       struct tnt_tm *tmp)
 {
-	struct tm *result;
+	struct tnt_tm *result;
 
 	result = timesub(timep, offset, gmtptr, tmp);
 #ifdef TM_ZONE
@@ -1649,22 +1651,22 @@ gmtsub(struct state const *sp, time_t const *timep, int_fast32_t offset,
  * Re-entrant version of gmtime.
  */
 
-struct tm *
-gmtime_r(const time_t *timep, struct tm *tmp)
+struct tnt_tm *
+tnt_gmtime_r(const time_t *timep, struct tnt_tm *tmp)
 {
 	gmtcheck();
 	return gmtsub(gmtptr, timep, 0, tmp);
 }
 
-struct tm *
-gmtime(const time_t *timep)
+struct tnt_tm *
+tnt_gmtime(const time_t *timep)
 {
-	return gmtime_r(timep, &tm);
+	return tnt_gmtime_r(timep, &tm);
 }
 
 #ifdef STD_INSPIRED
 
-struct tm *
+struct tnt_tm *
 offtime(const time_t *timep, long offset)
 {
 	gmtcheck();
@@ -1691,9 +1693,9 @@ leaps_thru_end_of(time_t y)
 		      : leaps_thru_end_of_nonneg(y));
 }
 
-static struct tm *
+static struct tnt_tm *
 timesub(const time_t *timep, int_fast32_t offset, const struct state *sp,
-	struct tm *tmp)
+	struct tnt_tm *tmp)
 {
 	const struct lsinfo *lp;
 	time_t tdays;
@@ -1791,12 +1793,11 @@ timesub(const time_t *timep, int_fast32_t offset, const struct state *sp,
 		idays -= ip[tmp->tm_mon];
 	tmp->tm_mday = idays + 1;
 	tmp->tm_isdst = 0;
-#ifdef TM_GMTOFF
-	tmp->TM_GMTOFF = offset;
-#endif /* defined TM_GMTOFF */
+	tmp->tm_gmtoff = offset;
 	return tmp;
 }
 
+#if 0
 char *
 ctime(const time_t *timep)
 {
@@ -1806,17 +1807,18 @@ ctime(const time_t *timep)
 	*timer *	to local time in the form of a string. It is equivalent
 	*to *		asctime(localtime(timer))
 	*/
-	struct tm *tmp = localtime(timep);
+	struct tnt_tm *tmp = tnt_localtime(timep);
 	return tmp ? asctime(tmp) : NULL;
 }
 
 char *
 ctime_r(const time_t *timep, char *buf)
 {
-	struct tm mytm;
-	struct tm *tmp = localtime_r(timep, &mytm);
+	struct tnt_tm mytm;
+	struct tnt_tm *tmp = tnt_localtime_r(timep, &mytm);
 	return tmp ? asctime_r(tmp, buf) : NULL;
 }
+#endif
 
 /*
 ** Adapted from code provided by Robert Elz, who writes:
@@ -1902,8 +1904,8 @@ normalize_overflow32(int_fast32_t *tensptr, int *unitsptr, int base)
 }
 
 static int
-tmcomp(const struct tm *const atmp,
-       const struct tm *const btmp)
+tmcomp(const struct tnt_tm *const atmp,
+       const struct tnt_tm *const btmp)
 {
 	int result;
 
@@ -1918,9 +1920,9 @@ tmcomp(const struct tm *const atmp,
 }
 
 static time_t
-time2sub(struct tm *const tmp,
-	 struct tm *(*funcp)(struct state const *, time_t const *, int_fast32_t,
-			     struct tm *),
+time2sub(struct tnt_tm *const tmp,
+	 struct tnt_tm *(*funcp)(struct state const *, time_t const *, int_fast32_t,
+			     struct tnt_tm *),
 	 struct state const *sp, const int_fast32_t offset, bool *okayp,
 	 bool do_norm_secs)
 {
@@ -1933,7 +1935,7 @@ time2sub(struct tm *const tmp,
 	int_fast32_t y;
 	time_t newt;
 	time_t t;
-	struct tm yourtm, mytm;
+	struct tnt_tm yourtm, mytm;
 
 	*okayp = false;
 	yourtm = *tmp;
@@ -2016,7 +2018,7 @@ time2sub(struct tm *const tmp,
 		if (!funcp(sp, &t, offset, &mytm)) {
 			/*
 			** Assume that t is too extreme to be represented in
-			** a struct tm; arrange things so that it is less
+			** a struct tnt_tm; arrange things so that it is less
 			** extreme on the next pass.
 			*/
 			dir = (t > 0) ? 1 : -1;
@@ -2042,27 +2044,27 @@ time2sub(struct tm *const tmp,
 				lo = t;
 			continue;
 		}
-#if defined TM_GMTOFF && !UNINIT_TRAP
-		if (mytm.TM_GMTOFF != yourtm.TM_GMTOFF &&
-		    (yourtm.TM_GMTOFF < 0
-			     ? (-SECSPERDAY <= yourtm.TM_GMTOFF &&
-				(mytm.TM_GMTOFF <=
+#if !UNINIT_TRAP
+		if (mytm.tm_gmtoff != yourtm.tm_gmtoff &&
+		    (yourtm.tm_gmtoff < 0
+			     ? (-SECSPERDAY <= yourtm.tm_gmtoff &&
+				(mytm.tm_gmtoff <=
 				 (SMALLEST(INT_FAST32_MAX, LONG_MAX) +
-				  yourtm.TM_GMTOFF)))
-			     : (yourtm.TM_GMTOFF <= SECSPERDAY &&
+				  yourtm.tm_gmtoff)))
+			     : (yourtm.tm_gmtoff <= SECSPERDAY &&
 				((BIGGEST(INT_FAST32_MIN, LONG_MIN) +
-				  yourtm.TM_GMTOFF) <= mytm.TM_GMTOFF)))) {
+				  yourtm.tm_gmtoff) <= mytm.tm_gmtoff)))) {
 			/* MYTM matches YOURTM except with the wrong UT offset.
-			   YOURTM.TM_GMTOFF is plausible, so try it instead.
-			   It's OK if YOURTM.TM_GMTOFF contains uninitialized
+			   YOURTM.tm_gmtoff is plausible, so try it instead.
+			   It's OK if YOURTM.tm_gmtoff contains uninitialized
 			   data, since the guess gets checked.  */
 			time_t altt = t;
-			int_fast32_t diff = mytm.TM_GMTOFF - yourtm.TM_GMTOFF;
+			int_fast32_t diff = mytm.tm_gmtoff - yourtm.tm_gmtoff;
 			if (!increment_overflow_time(&altt, diff)) {
-				struct tm alttm;
+				struct tnt_tm alttm;
 				if (funcp(sp, &altt, offset, &alttm) &&
 				    alttm.tm_isdst == mytm.tm_isdst &&
-				    alttm.TM_GMTOFF == yourtm.TM_GMTOFF &&
+				    alttm.tm_gmtoff == yourtm.tm_gmtoff &&
 				    tmcomp(&alttm, &yourtm) == 0) {
 					t = altt;
 					mytm = alttm;
@@ -2116,9 +2118,9 @@ label:
 }
 
 static time_t
-time2(struct tm *const tmp,
-      struct tm *(*funcp)(struct state const *, time_t const *, int_fast32_t,
-			  struct tm *),
+time2(struct tnt_tm *const tmp,
+      struct tnt_tm *(*funcp)(struct state const *, time_t const *, int_fast32_t,
+			  struct tnt_tm *),
       struct state const *sp, const int_fast32_t offset, bool *okayp)
 {
 	time_t t;
@@ -2133,9 +2135,9 @@ time2(struct tm *const tmp,
 }
 
 static time_t
-time1(struct tm *const tmp,
-      struct tm *(*funcp)(struct state const *, time_t const *, int_fast32_t,
-			  struct tm *),
+time1(struct tnt_tm *const tmp,
+      struct tnt_tm *(*funcp)(struct state const *, time_t const *, int_fast32_t,
+			  struct tnt_tm *),
       struct state const *sp, const int_fast32_t offset)
 {
 	time_t t;
@@ -2167,7 +2169,7 @@ time1(struct tm *const tmp,
 #endif /* !defined PCTS */
 	/*
 	** We're supposed to assume that somebody took a time of one type
-	** and did some math on it that yielded a "struct tm" that's bad.
+	** and did some math on it that yielded a "struct tnt_tm" that's bad.
 	** We try to divine the type they started from and adjust to the
 	** type they need.
 	*/
@@ -2204,7 +2206,7 @@ time1(struct tm *const tmp,
 }
 
 static time_t
-mktime_tzname(struct state *sp, struct tm *tmp, bool setname)
+mktime_tzname(struct state *sp, struct tnt_tm *tmp, bool setname)
 {
 	if (sp)
 		return time1(tmp, localsub, sp, setname);
@@ -2217,15 +2219,16 @@ mktime_tzname(struct state *sp, struct tm *tmp, bool setname)
 #if NETBSD_INSPIRED
 
 time_t
-mktime_z(struct state *sp, struct tm *tmp)
+mktime_z(struct state *sp, struct tnt_tm *tmp)
 {
 	return mktime_tzname(sp, tmp, false);
 }
 
 #endif
 
+#if 0
 time_t
-mktime(struct tm *tmp)
+mktime(struct tnt_tm *tmp)
 {
 	time_t t;
 	int err = lock();
@@ -2238,11 +2241,12 @@ mktime(struct tm *tmp)
 	unlock();
 	return t;
 }
+#endif
 
 #ifdef STD_INSPIRED
 
 time_t
-timelocal(struct tm *tmp)
+timelocal(struct tnt_tm *tmp)
 {
 	if (tmp != NULL)
 		tmp->tm_isdst = -1; /* in case it wasn't initialized */
@@ -2250,13 +2254,13 @@ timelocal(struct tm *tmp)
 }
 
 time_t
-timegm(struct tm *tmp)
+timegm(struct tnt_tm *tmp)
 {
 	return timeoff(tmp, 0);
 }
 
 time_t
-timeoff(struct tm *tmp, long offset)
+timeoff(struct tnt_tm *tmp, long offset)
 {
 	if (tmp)
 		tmp->tm_isdst = 0;
