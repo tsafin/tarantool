@@ -220,6 +220,12 @@ datetime_to_string(const struct datetime *date, char *buf, ssize_t len)
 	return sz;
 }
 
+static inline int64_t
+dt_epoch(dt_t dt)
+{
+	return ((int64_t)dt_rdn(dt) - DT_EPOCH_1970_OFFSET) * SECS_PER_DAY;
+}
+
 ssize_t
 datetime_parse_full(struct datetime *date, const char *str, size_t len,
 		    int32_t offset)
@@ -284,9 +290,7 @@ datetime_parse_full(struct datetime *date, const char *str, size_t len,
 	str += n;
 
 exit:
-	date->epoch =
-		((int64_t)dt_rdn(dt) - DT_EPOCH_1970_OFFSET) * SECS_PER_DAY +
-		sec_of_day - offset * 60;
+	date->epoch = dt_epoch(dt) + sec_of_day - offset * 60;
 	date->nsec = nanosecond;
 	date->tzoffset = offset;
 	date->tzindex = tzindex;

@@ -8,7 +8,37 @@
 #include <stddef.h>
 #include "datetime.h"
 #include "timezone.h"
+#include "tzcode.h"
 #include "trivia/util.h"
+
+/**
+ * Array for translation from zone id to unique zone name.
+ * Alizase do not occupy entries, and will be displayed as
+ * original zone name they point to.
+ */
+static const char * zone_names[] = {
+#define ZONE_ABBREV(id, offset, name, flags) [id] = name,
+#define ZONE_UNIQUE(id, name) [id] = name,
+#define ZONE_ALIAS(id, alias, name)
+#include "timezones.h"
+#undef ZONE_ALIAS
+#undef ZONE_UNIQUE
+#undef ZONE_ABBREV
+};
+
+/**
+ * Array of zone descriptors, whether it's abbreviations, full
+ * zone name or [backward-compatible] link name.
+ */
+static struct date_time_zone zone_abbrevs[] = {
+#define ZONE_ABBREV(id, offset, name, flags) { name, id, flags, offset },
+#define ZONE_UNIQUE(id, name) { name, id, TZ_OLSON, 0 },
+#define ZONE_ALIAS(id, alias, name) { alias, id, TZ_OLSON|TZ_ALIAS, 0 },
+#include "timezones.h"
+#undef ZONE_ALIAS
+#undef ZONE_UNIQUE
+#undef ZONE_ABBREV
+};
 
 int16_t
 timezone_offset(const struct date_time_zone *zone)
@@ -28,33 +58,14 @@ timezone_flags(const struct date_time_zone *zone)
 	return zone->flags;
 }
 
-
-static const char * zone_names[] = {
-#define ZONE_ABBREV(id, offset, name, flags) [id] = name,
-#define ZONE_UNIQUE(id, name) [id] = name,
-#define ZONE_ALIAS(id, alias, name)
-#include "timezones.h"
-#undef ZONE_ALIAS
-#undef ZONE_UNIQUE
-#undef ZONE_ABBREV
-};
-
 const char*
 timezone_name(int64_t index)
 {
 	assert((size_t)index < lengthof(zone_names));
+	if (zone_abbrevs[index].flags & TZ_ALIAS)
+		index = zone_abbrevs[index].id;
 	return zone_names[index];
 }
-
-static struct date_time_zone zone_abbrevs[] = {
-#define ZONE_ABBREV(id, offset, name, flags) { name, id, flags, offset },
-#define ZONE_UNIQUE(id, name) { name, id, TZ_OLSON, 0 },
-#define ZONE_ALIAS(id, alias, name) { alias, id, TZ_OLSON|TZ_ALIAS, 0 },
-#include "timezones.h"
-#undef ZONE_ALIAS
-#undef ZONE_UNIQUE
-#undef ZONE_ABBREV
-};
 
 static int
 compare_abbrevs(const void *a, const void *b)
@@ -119,6 +130,13 @@ timezone_lookup(const char *str, size_t len, const struct date_time_zone **zone)
 		       (TZ_NYI | TZ_AMBIGUOUS));
 		if (found->flags & (TZ_NYI | TZ_AMBIGUOUS))
 			return -found->flags;
+		if (found->flags & TZ_OLSON) {
+			timezone_t tz = tzalloc(str);
+			assert(tz != NULL);
+			assert(0);
+			// TODO
+			tzfree(tz);
+		}
 		*zone = found;
 		return len;
 	}
