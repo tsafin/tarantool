@@ -127,6 +127,9 @@ typedef struct state *timezone_t;
 timezone_t tzalloc(const char *);
 void tzfree(timezone_t);
 
+struct tnt_tm *
+tnt_localtime_rz(struct state *sp, time_t const *timep, struct tnt_tm *tmp);
+
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif /* defined(__cplusplus) */

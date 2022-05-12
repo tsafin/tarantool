@@ -11,6 +11,8 @@
 extern "C" {
 #endif
 
+struct tnt_tm;
+
 enum {
 	TZ_UTC = 0x01,
 	TZ_RFC = 0x02,
@@ -40,6 +42,7 @@ struct date_time_zone {
  * with attributes of this symbol
  * @param[in] s input string to parse
  * @param[in] len length of input string
+ * @param[in] base use base date for timezone parameters resolution
  * @param[out] zone return zone structure, if found
  * @retval positive value - length of accepted string,
  *         negative value - string looks legit, but is unknown or
@@ -47,7 +50,15 @@ struct date_time_zone {
  *         0 - means string is bogus, and should be ignored.
  */
 ssize_t
-timezone_lookup(const char *s, size_t len, const struct date_time_zone **zone);
+timezone_epoch_lookup(const char *s, size_t len, time_t base,
+		      const struct date_time_zone **zone);
+
+/** FIXME */
+ssize_t
+timezone_tm_lookup(const char *str, size_t len,
+		   const struct date_time_zone **zone,
+		   struct tnt_tm *tm);
+
 /** Return offset in minutes for given zone */
 int16_t
 timezone_offset(const struct date_time_zone *zone);

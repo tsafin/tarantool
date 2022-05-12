@@ -159,6 +159,12 @@ void
 datetime_to_tm(const struct datetime *date, struct tnt_tm *tm);
 
 /**
+ * Create @sa datetime structure using given @sa tnt_tm fields.
+ */
+bool
+tm_to_datetime(struct tnt_tm *tm, struct datetime *date);
+
+/**
  * Parse datetime text in ISO-8601 given format, and construct output
  * datetime value
  * @param date output datetime value
@@ -188,7 +194,7 @@ datetime_parse_full(struct datetime *date, const char *str, size_t len,
  * @sa datetime_parse_full()
  */
 ssize_t
-datetime_parse_tz(const char *str, size_t len, int16_t *tzoffset,
+datetime_parse_tz(const char *str, size_t len, time_t base, int16_t *tzoffset,
 		  int16_t *tzindex);
 
 /**

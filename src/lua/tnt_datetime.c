@@ -41,10 +41,10 @@ tnt_datetime_parse_full(struct datetime *date, const char *str, size_t len,
 }
 
 ssize_t
-tnt_datetime_parse_tz(const char *str, size_t len, int16_t *tzoffset,
-		      int16_t *tzindex)
+tnt_datetime_parse_tz(const char *str, size_t len, time_t base_date,
+		      int16_t *tzoffset, int16_t *tzindex)
 {
-	return datetime_parse_tz(str, len, tzoffset, tzindex);
+	return datetime_parse_tz(str, len, base_date, tzoffset, tzindex);
 }
 
 struct datetime *

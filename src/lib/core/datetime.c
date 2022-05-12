@@ -76,10 +76,7 @@ datetime_strftime(const struct datetime *date, char *buf, size_t len,
 	return tnt_strftime(buf, len, fmt, &tm);
 }
 
-/**
- * Create datetime structure using given tnt_tm fieldsю
- */
-static bool
+bool
 tm_to_datetime(struct tnt_tm *tm, struct datetime *date)
 {
 	assert(tm != NULL);
@@ -271,12 +268,12 @@ datetime_parse_full(struct datetime *date, const char *str, size_t len,
 
 	/* 1st attempt: decode as MSK */
 	const struct date_time_zone *zone;
-	ssize_t l = timezone_lookup(str, len, &zone);
+	time_t base = dt_epoch(dt) + sec_of_day - offset * 60;
+	ssize_t l = timezone_epoch_lookup(str, len, base, &zone);
 	if (l < 0)
 		return l;
 	if (l > 0) {
 		assert(zone != NULL);
-		assert(((TZ_AMBIGUOUS | TZ_NYI) & timezone_flags(zone)) == 0);
 		offset = timezone_offset(zone);
 		tzindex = timezone_index(zone);
 		str += l;
@@ -299,11 +296,11 @@ exit:
 }
 
 ssize_t
-datetime_parse_tz(const char *str, size_t len, int16_t *tzoffset,
+datetime_parse_tz(const char *str, size_t len, time_t base, int16_t *tzoffset,
 		  int16_t *tzindex)
 {
 	const struct date_time_zone *zone;
-	ssize_t l = timezone_lookup(str, len, &zone);
+	ssize_t l = timezone_epoch_lookup(str, len, base, &zone);
 	if (l <= 0)
 		return l;
 

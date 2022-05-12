@@ -69,8 +69,8 @@ size_t tnt_datetime_strftime(const struct datetime *date, char *buf,
                              uint32_t len, const char *fmt);
 ssize_t tnt_datetime_parse_full(struct datetime *date, const char *str,
                                 size_t len, int32_t offset);
-ssize_t tnt_datetime_parse_tz(const char *str, size_t len, int16_t *tzoffset,
-                              int16_t *tzindex);
+ssize_t tnt_datetime_parse_tz(const char *str, size_t len, time_t base,
+                              int16_t *tzoffset, int16_t *tzindex);
 size_t tnt_datetime_strptime(struct datetime *date, const char *buf,
                              const char *fmt);
 void   tnt_datetime_now(struct datetime *now);
@@ -441,16 +441,20 @@ local function parse_tzoffset(str)
     return offset[0]
 end
 
+local function epoch_from_dt(dt)
+    return (dt - DAYS_EPOCH_OFFSET) * SECS_PER_DAY
+end
+
 --[[
     Parse timezone name similar way as datetime_parse_full parse
     full literal.
 ]]
-local function parse_tzname(tzname)
+local function parse_tzname(base_epoch, tzname)
     check_str(tzname, 'parse_tzname()')
     local ptzindex = date_int16_stash_take()
     local ptzoffset = date_int16_stash_take()
-    local len = builtin.tnt_datetime_parse_tz(tzname, #tzname, ptzoffset,
-                                              ptzindex)
+    local len = builtin.tnt_datetime_parse_tz(tzname, #tzname, base_epoch,
+                                              ptzoffset, ptzindex)
     if len > 0 then
         local tzoffset, tzindex = ptzoffset[0], ptzindex[0]
         date_int16_stash_put(ptzoffset)
@@ -486,8 +490,7 @@ local function datetime_new_dt(dt, secs, nanosecs, offset, tzindex)
     nanosecs = nanosecs or 0
     offset = offset or 0
     tzindex = tzindex or 0
-    local epoch = (dt - DAYS_EPOCH_OFFSET) * SECS_PER_DAY
-    return datetime_new_raw(epoch + secs - offset * 60, nanosecs,
+    return datetime_new_raw(epoch_from_dt(dt) + secs - offset * 60, nanosecs,
                             offset, tzindex)
 end
 
@@ -593,12 +596,6 @@ local function datetime_new(obj)
         check_range(offset, -720, 840, 'tzoffset')
     end
 
-    local tzindex = 0
-    local tzname = obj.tz
-    if tzname ~= nil then
-        offset, tzindex = parse_tzname(tzname)
-    end
-
     -- .year, .month, .day
     if ymd then
         y = y or 1970
@@ -614,6 +611,12 @@ local function datetime_new(obj)
             end
         end
         dt = dt_from_ymd_checked(y, M, d)
+    end
+
+    local tzindex = 0
+    local tzname = obj.tz
+    if tzname ~= nil then
+        offset, tzindex = parse_tzname(epoch_from_dt(dt), tzname)
     end
 
     -- .hour, .minute, .second
@@ -888,7 +891,7 @@ local function datetime_parse_from(str, obj)
         check_range(offset, -720, 840, 'tzoffset')
     end
     if obj and obj.tz ~= nil then
-        offset, tzindex = parse_tzname(obj.tz)
+        offset, tzindex = parse_tzname(0, obj.tz) -- FIXME 0
     end
 
     if not fmt or fmt == '' or fmt == 'iso8601' or fmt == 'rfc3339' then
@@ -1058,7 +1061,7 @@ local function datetime_set(self, obj)
 
     local tzname = obj.tz
     if tzname ~= nil then
-        offset, self.tzindex = parse_tzname(tzname)
+        offset, self.tzindex = parse_tzname(0, tzname) -- FIXME 0
     end
 
     local ts = obj.timestamp
@@ -1097,6 +1100,11 @@ local function datetime_set(self, obj)
         M = M or M0
         d = d or d0
         datetime_ymd_update(self, y, M, d)
+    end
+
+    local tzname = obj.tz
+    if tzname ~= nil then
+        offset, self.tzindex = parse_tzname(self.epoch, tzname)
     end
 
     -- .hour, .minute, .second
