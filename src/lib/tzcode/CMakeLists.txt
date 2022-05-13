@@ -4,11 +4,10 @@ target_link_libraries(tzcode)
 
 set(TZCODE_PROJECT tzcode-github)
 set(TZCODE_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR})
-set(TZCODE_PREFIX ${TZCODE_BUILD_DIR}/tz)
+set(TZCODE_PREFIX_DIR tz)
+set(TZCODE_PREFIX ${TZCODE_BUILD_DIR}/${TZCODE_PREFIX_DIR})
 set(TZDATA_TARGETS main.zi)
-# set(TZDATA_FULL_TARGETS
-#     ${TZCODE_PREFIX}/src/${TZCODE_PROJECT}/main.zi
-#)
+set(TZCODE_SRC ${PROJECT_SOURCE_DIR}/src/lib/tzcode)
 
 list(TRANSFORM TZDATA_TARGETS
      PREPEND ${TZCODE_PREFIX}/src/${TZCODE_PROJECT}/
@@ -19,8 +18,9 @@ ExternalProject_Add(${TZCODE_PROJECT}
     GIT_TAG 2022a
     GIT_SHALLOW YES
 
+    EXCLUDE_FROM_ALL 1
     INSTALL_DIR ${TZCODE_BUILD_DIR}/install
-    PREFIX 
+    PREFIX ${TZCODE_PREFIX_DIR}
 
     UPDATE_COMMAND ""
     CONFIGURE_COMMAND ""
@@ -35,3 +35,19 @@ ExternalProject_Add(${TZCODE_PROJECT}
     INSTALL_COMMAND make DESTDIR=<INSTALL_DIR> install
     BUILD_BYPRODUCTS ${TZDATA_FULL_TARGETS}
 )
+
+add_custom_target(gen-timezones DEPENDS ${TZCODE_PROJECT})
+add_custom_command(TARGET gen-timezones
+    COMMAND
+    perl ${TZCODE_SRC}/gen-zone-abbrevs.pl ${TZCODE_SRC}/zone-abbrevs.txt
+    ${TZDATA_FULL_TARGETS} > ${TZCODE_SRC}/timezones.h
+    COMMENT "Generating timezones.h"
+)
+
+# We excluded build of get-timezones and tzcode-github (main.zi) targets
+# from ALL dependencies (see EXCLUDE_FROM_ALL=1) if you, by eitehr reason
+# need to regenerate timezones.h then invoke target manually:
+# ```sh
+#   make gen-timezones VERBOSE=1
+# ```
+# it will regenerate `timezones.h` in-place, in their repository location.

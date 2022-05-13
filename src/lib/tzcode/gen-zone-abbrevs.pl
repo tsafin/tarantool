@@ -129,6 +129,7 @@ my $EntryRx = do {
 };
 
 my %ZoneAbbrevs;
+my %ZoneAbbrevNames;
 
 # read zone-abbrevs.txt with definition of all currently known
 # timezone abbreviations.
@@ -176,6 +177,7 @@ sub read_abbrevs_file($) {
         }
 
         $ZoneAbbrevs{$encoded} = [ $flags, $offset, $name ];
+        $ZoneAbbrevNames{$name}++;
     }
 }
 
@@ -192,13 +194,14 @@ sub read_zi_file($) {
     while (<$fh>) {
         next if /^#/;
         if (/^Zone\s+([A-Za-z\-\_\/]+)\s+/) {
-            my $zone   = $1;
-            $ZoneNames{$zone}++ if $zone =~ q|/|;
-            next;
-        }
-        if (/^[#]?Link\s+(\S+)\s+(\S+)/) {
+            my $zone = $1;
+            next unless $zone =~ q|/|;
+            $ZoneNames{$zone}++;
+        } elsif (/^[#]?Link\s+(\S+)\s+(\S+)/) {
             my $zone = $1;
             my $link = $2;
+            # do not create alias if it's known abbreviation
+            next if defined $ZoneAbbrevNames{$link};
             $Aliases{$link} = $zone;
         }
     }
