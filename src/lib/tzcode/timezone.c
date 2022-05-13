@@ -112,7 +112,7 @@ char_span_alpha(const char *src, size_t len)
 
 static inline ssize_t
 timezone_raw_lookup(const char *str, size_t len,
-		    const struct date_time_zone **zone)
+		    struct date_time_zone **zone)
 {
 	len = char_span_alpha(str, len);
 	if (len == 0)
@@ -137,7 +137,7 @@ timezone_raw_lookup(const char *str, size_t len,
 
 ssize_t
 timezone_tm_lookup(const char *str, size_t len,
-		   const struct date_time_zone **zone,
+		   struct date_time_zone **zone,
 		   struct tnt_tm *tm)
 {
 	ssize_t rc = timezone_raw_lookup(str, len, zone);
@@ -145,25 +145,22 @@ timezone_tm_lookup(const char *str, size_t len,
 		return rc;
 
 	const struct date_time_zone *found = *zone;
-	if (found->flags & (TZ_RFC | TZ_UTC | TZ_MILITARY)) {
-		tm->tm_gmtoff = found->offset;
+	if ((found->flags & TZ_OLSON) == 0) {
+		tm->tm_gmtoff = found->offset * 60;
 		tm->tm_tzindex = found->id;
 		tm->tm_isdst = false;
 		return rc;
 	}
-	timezone_t tz = NULL;
-	if (found->flags & TZ_OLSON) {
-		tz = tzalloc(str); // FIXME - cache loaded
-		assert(tz != NULL);
-		struct datetime date = {.epoch = 0};
-		if (tm_to_datetime(tm, &date) == false)
-			goto exit_0;
-		time_t epoch = (int64_t)date.epoch;
-		struct tnt_tm * result = tnt_localtime_rz(tz, &epoch, tm);
-		if (result == NULL)
-			goto exit_0;
-		tzfree(tz);
-	}
+	timezone_t tz = tzalloc(str); // FIXME - cache loaded
+	assert(tz != NULL);
+	struct datetime date = {.epoch = 0};
+	if (tm_to_datetime(tm, &date) == false)
+		goto exit_0;
+	time_t epoch = (int64_t)date.epoch;
+	struct tnt_tm * result = tnt_localtime_rz(tz, &epoch, tm);
+	if (result == NULL)
+		goto exit_0;
+	tzfree(tz);
 	return rc;
 exit_0:
 	if (tz != NULL)
@@ -173,13 +170,13 @@ exit_0:
 
 ssize_t
 timezone_epoch_lookup(const char *str, size_t len, time_t base,
-		      const struct date_time_zone **zone)
+		      struct date_time_zone **zone)
 {
 	ssize_t rc = timezone_raw_lookup(str, len, zone);
 	if (rc <= 0)
 		return rc;
 
-	const struct date_time_zone *found = *zone;
+	struct date_time_zone *found = *zone;
 	if (found->flags & (TZ_RFC | TZ_UTC | TZ_MILITARY)) {
 		assert(((TZ_AMBIGUOUS | TZ_NYI) & found->flags) == 0);
 		return rc;
@@ -192,6 +189,8 @@ timezone_epoch_lookup(const char *str, size_t len, time_t base,
 		struct tnt_tm * result = tnt_localtime_rz(tz, &base, &tm);
 		if (result == NULL)
 			goto exit_0;
+		// FIXME - found a better way to return tzoffset
+		found->offset = result->tm_gmtoff / 60;
 		tzfree(tz);
 	}
 	return rc;

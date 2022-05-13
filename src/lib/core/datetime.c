@@ -267,7 +267,7 @@ datetime_parse_full(struct datetime *date, const char *str, size_t len,
 		goto exit;
 
 	/* 1st attempt: decode as MSK */
-	const struct date_time_zone *zone;
+	struct date_time_zone *zone;
 	time_t base = dt_epoch(dt) + sec_of_day - offset * 60;
 	ssize_t l = timezone_epoch_lookup(str, len, base, &zone);
 	if (l < 0)
@@ -299,7 +299,7 @@ ssize_t
 datetime_parse_tz(const char *str, size_t len, time_t base, int16_t *tzoffset,
 		  int16_t *tzindex)
 {
-	const struct date_time_zone *zone;
+	struct date_time_zone *zone;
 	ssize_t l = timezone_epoch_lookup(str, len, base, &zone);
 	if (l <= 0)
 		return l;

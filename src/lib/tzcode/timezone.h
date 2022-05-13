@@ -51,12 +51,12 @@ struct date_time_zone {
  */
 ssize_t
 timezone_epoch_lookup(const char *s, size_t len, time_t base,
-		      const struct date_time_zone **zone);
+		      struct date_time_zone **zone);
 
 /** FIXME */
 ssize_t
 timezone_tm_lookup(const char *str, size_t len,
-		   const struct date_time_zone **zone,
+		   struct date_time_zone **zone,
 		   struct tnt_tm *tm);
 
 /** Return offset in minutes for given zone */

@@ -550,7 +550,7 @@ tnt_strptime(const char *__restrict buf, const char *__restrict fmt,
 				strncpy(zonestr, buf, cp - buf);
 				zonestr[cp - buf] = '\0';
 
-				const struct date_time_zone *zone;
+				struct date_time_zone *zone;
 				size_t n = timezone_tm_lookup(zonestr, cp - buf,
 							      &zone, tm);
 				if (n <= 0)
