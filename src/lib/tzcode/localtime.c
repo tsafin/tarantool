@@ -127,8 +127,10 @@ static bool
 increment_overflow_time(time_t *, int_fast32_t);
 static int_fast32_t
 leapcorr(struct state const *, time_t);
+#if 0 // NETBSD_INSPIRED
 static bool
 normalize_overflow32(int_fast32_t *, int *, int);
+#endif
 static struct tnt_tm *
 timesub(time_t const *, int_fast32_t, struct state const *, struct tnt_tm *);
 static bool
@@ -1855,17 +1857,6 @@ increment_overflow(int *ip, int j)
 }
 
 static bool
-increment_overflow32(int_fast32_t *const lp, int const m)
-{
-	int_fast32_t const l = *lp;
-
-	if ((l >= 0) ? (m > INT_FAST32_MAX - l) : (m < INT_FAST32_MIN - l))
-		return true;
-	*lp += m;
-	return false;
-}
-
-static bool
 increment_overflow_time(time_t *tp, int_fast32_t j)
 {
 	/*
@@ -1878,6 +1869,19 @@ increment_overflow_time(time_t *tp, int_fast32_t j)
 		    : *tp <= TIME_T_MAX - j))
 		return true;
 	*tp += j;
+	return false;
+}
+
+#if 0 // NETBSD_INSPIRED
+
+static bool
+increment_overflow32(int_fast32_t *const lp, int const m)
+{
+	int_fast32_t const l = *lp;
+
+	if ((l >= 0) ? (m > INT_FAST32_MAX - l) : (m < INT_FAST32_MIN - l))
+		return true;
+	*lp += m;
 	return false;
 }
 
@@ -2216,8 +2220,6 @@ mktime_tzname(struct state *sp, struct tnt_tm *tmp, bool setname)
 	}
 }
 
-#if NETBSD_INSPIRED
-
 time_t
 mktime_z(struct state *sp, struct tnt_tm *tmp)
 {
@@ -2289,7 +2291,7 @@ leapcorr(struct state const *sp, time_t t)
 ** XXX--is the below the right way to conditionalize??
 */
 
-#ifdef STD_INSPIRED
+#if 0 //def STD_INSPIRED
 
 /* NETBSD_INSPIRED_EXTERN functions are exported to callers if
    NETBSD_INSPIRED is defined, and are private otherwise.  */
