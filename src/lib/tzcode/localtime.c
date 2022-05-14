@@ -430,7 +430,7 @@ tzloadbody(char const *name, struct state *sp, bool doextend,
 		int_fast32_t ttisstdcnt = detzcode(up->tzhead.tzh_ttisstdcnt);
 		int_fast32_t ttisutcnt = detzcode(up->tzhead.tzh_ttisutcnt);
 		int_fast64_t prevtr = -1;
-		int_fast32_t prevcorr;
+		int_fast32_t prevcorr = 0;
 		int_fast32_t leapcnt = detzcode(up->tzhead.tzh_leapcnt);
 		int_fast32_t timecnt = detzcode(up->tzhead.tzh_timecnt);
 		int_fast32_t typecnt = detzcode(up->tzhead.tzh_typecnt);
