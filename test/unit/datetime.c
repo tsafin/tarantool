@@ -177,7 +177,8 @@ tostring_datetime_test(void)
 			tests[index].secs,
 			tests[index].nsec,
 			tests[index].offset,
-			0
+			0,
+			false,
 		};
 		char buf[48];
 		datetime_to_string(&date, buf, sizeof(buf));
@@ -417,7 +418,8 @@ mp_datetime_test()
 			tests[index].secs,
 			tests[index].nsec,
 			tests[index].offset,
-			0
+			0,
+			false,
 		};
 		char buf[24], *data = buf;
 		const char *data1 = buf;
@@ -474,7 +476,7 @@ mp_print_test(void)
 	char sample[64];
 	char buffer[64];
 	char str[64];
-	struct datetime date = {0, 0, 0, 0}; // 1970-01-01T00:00Z
+	struct datetime date = {0, 0, 0, 0, false}; // 1970-01-01T00:00Z
 
 	mp_encode_datetime(buffer, &date);
 	int sz = datetime_to_string(&date, str, sizeof(str));

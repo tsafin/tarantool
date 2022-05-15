@@ -949,7 +949,7 @@ local function datetime_totable(self)
         hour = tmp_ival.hour,
         min = tmp_ival.min,
         sec = tmp_ival.sec,
-        isdst = false,
+        isdst = self.isdst,
         nsec = self.nsec,
         tzoffset = self.tzoffset,
     }

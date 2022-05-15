@@ -21,6 +21,9 @@ enum {
 	TZ_NYI = 0x10,
 	TZ_OLSON = 0x20,
 	TZ_ALIAS = 0x40,
+	TZ_DST = 0x80,
+
+	TZ_ERROR_MASK = TZ_AMBIGUOUS | TZ_NYI,
 };
 
 /**
@@ -68,6 +71,9 @@ timezone_index(const struct date_time_zone *zone);
 /** Return attributes flags for given zone */
 uint16_t
 timezone_flags(const struct date_time_zone *zone);
+/** Return DST flag for given zone */
+bool
+timezone_isdst(const struct date_time_zone *zone);
 /** Translate tzindex to zone name */
 const char*
 timezone_name(int64_t index);

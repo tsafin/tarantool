@@ -233,6 +233,7 @@ datetime_parse_full(struct datetime *date, const char *str, size_t len,
 	char c;
 	int sec_of_day = 0, nanosecond = 0;
 	int16_t tzindex = 0;
+	bool isdst = false;
 
 	n = dt_parse_iso_date(str, len, &dt);
 	if (n == 0)
@@ -276,6 +277,7 @@ datetime_parse_full(struct datetime *date, const char *str, size_t len,
 		assert(zone != NULL);
 		offset = timezone_offset(zone);
 		tzindex = timezone_index(zone);
+		isdst = timezone_isdst(zone);
 		str += l;
 		len -= l;
 		if (len <= 0)
@@ -291,6 +293,7 @@ exit:
 	date->nsec = nanosecond;
 	date->tzoffset = offset;
 	date->tzindex = tzindex;
+	date->isdst = isdst;
 
 	return str - svp;
 }

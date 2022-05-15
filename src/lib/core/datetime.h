@@ -75,6 +75,8 @@ struct datetime {
 	int16_t tzoffset;
 	/** Olson timezone id */
 	int16_t tzindex;
+	/** Daylight saving time active */
+	bool isdst;
 };
 
 /**

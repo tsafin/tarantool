@@ -744,6 +744,7 @@ tarantool_lua_utils_init(struct lua_State *L)
 				  "int32_t nsec;"
 				  "int16_t tzoffset;"
 				  "int16_t tzindex;"
+				  "bool isdst;"
 			  "};");
 	assert(rc == 0);
 	(void) rc;
