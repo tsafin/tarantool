@@ -34,7 +34,9 @@ static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__,
  *
  */
 
-#define SZ_TAIL sizeof(struct datetime) - sizeof(((struct datetime *)0)->epoch)
+#define SZ_TAIL (sizeof(struct datetime) - \
+		 sizeof(((struct datetime *)0)->epoch) - \
+		 sizeof(((struct datetime *)0)->isdst))
 
 static inline uint32_t
 mp_sizeof_datetime_raw(const struct datetime *date)
@@ -75,6 +77,10 @@ datetime_unpack(const char **data, uint32_t len, struct datetime *date)
 	}
 	memcpy(&date->nsec, *data, SZ_TAIL);
 	*data += SZ_TAIL;
+	/* if there is defined timezone index thne recalculate isdst */
+	if (date->tzindex != 0) {
+
+	}
 
 	return date;
 }
