@@ -1,7 +1,6 @@
 local t = require('luatest')
 local popen = require('popen')
 local tnt = require('tarantool')
-local g = t.group()
 
 local function normalize_path(s)
     return s:gsub("^@", ""):gsub("[^/]+$", "")
@@ -29,6 +28,10 @@ local debug_target_script = path_to_script .. 'debug-target.lua'
 local DEBUGGER = 'luadebug.lua'
 local dbg_header = DEBUGGER .. ": Loaded for " .. tnt.version
 local dbg_prompt = DEBUGGER .. '>'
+local dbg_failed_bp = 'command expects argument in format filename:NN or ' ..
+                      'filename+NN, where NN should be a positive number.'
+local dbg_failed_bpd = 'command expects argument specifying breakpoint or' ..
+                      ' * for all breakpoints.'
 
 local cmd_aliases = {
     ['c'] = 'c|cont|continue',
@@ -68,35 +71,93 @@ local function get_key_arg_pair(cmd)
     return gen(), gen()
 end
 
-local sequence = {
-    { ['\t'] = dbg_header }, -- \t is a special value for start
-    { ['n'] = dbg_prompt },
-    { ['s'] = dbg_prompt },
-    { ['n'] = dbg_prompt },
-    { ['n'] = dbg_prompt },
-    { ['p'] = 'command expects argument, but none received' },
-    { ['p obj'] = 'obj => {"tzoffset" = "+0300", "hour" = 3}' },
-    { ['n'] = dbg_prompt },
-    { ['p ymd'] = 'ymd => false' },
-    { ['w'] = 'local hms = false' },
-    { ['h'] = dbg_prompt },
-    { ['t'] = '=> builtin/datetime.lua' },
-    { ['u'] = 'debug-target.lua:5 in chunk at' },
-    { ['u'] = 'Already at the bottom of the stack.' },
-    { ['d'] = 'Inspecting frame: builtin/datetime.lua' },
-    { ['l'] = 'obj => {"tzoffset" = "+0300", "hour" = 3}' },
-    { ['f'] = dbg_prompt },
-    { ['n'] = dbg_prompt },
-    { ['p T'] = 'T => 1970-01-01T03:00:00+0300' },
-    { ['n'] = dbg_prompt },
-    { [''] = dbg_prompt },
-    { [''] = dbg_prompt },
-    { [''] = dbg_prompt },
-    { ['p S'] = 'S => "1970-01-01T0300+0300"' },
-    { ['c'] = '' },
+local g = t.group('debug', {
+    {sequence = 'full'},
+    {sequence = 'bps_ok'},
+    {sequence = 'bps_fail'},
+    {sequence = 'bpd_ok'},
+    {sequence = 'bpd_fail'},
+})
+
+local sequences = {
+
+    -- full, complex sequence
+    full = {
+        { ['\t'] = dbg_header }, -- \t is a special value for start
+        { ['n'] = dbg_prompt },
+        { ['s'] = dbg_prompt },
+        { ['n'] = dbg_prompt },
+        { ['n'] = dbg_prompt },
+        { ['p'] = 'command expects argument, but none received' },
+        { ['p obj'] = 'obj => {"tzoffset" = "+0300", "hour" = 3}' },
+        { ['n'] = dbg_prompt },
+        { ['p ymd'] = 'ymd => false' },
+        { ['w'] = 'local hms = false' },
+        { ['h'] = dbg_prompt },
+        { ['t'] = '=> builtin/datetime.lua' },
+        { ['u'] = 'debug-target.lua:5 in chunk at' },
+        { ['u'] = 'Already at the bottom of the stack.' },
+        { ['d'] = 'Inspecting frame: builtin/datetime.lua' },
+        { ['l'] = 'obj => {"tzoffset" = "+0300", "hour" = 3}' },
+        { ['f'] = dbg_prompt },
+        { ['n'] = dbg_prompt },
+        { ['p T'] = 'T => 1970-01-01T03:00:00+0300' },
+        { ['n'] = dbg_prompt },
+        { [''] = dbg_prompt },
+        { [''] = dbg_prompt },
+        { [''] = dbg_prompt },
+        { ['p S'] = 'S => "1970-01-01T0300+0300"' },
+        { ['c'] = '' },
+    },
+
+    -- partial sequence with successful breakpoints added
+    bps_ok = {
+        { ['\t'] = dbg_header }, -- \t is a special value for start
+        { ['b +11'] = dbg_prompt },
+        { ['c'] = 'debug-target.lua:11' },
+        { ['n'] = dbg_prompt },
+        { ['p S'] = 'S => "1970-01-01T0300+0300"' },
+        { ['p T'] = 'T => 1970-01-01T03:00:00+0300' },
+        { ['c'] = '' },
+    },
+
+    -- partial sequence with failed breakpoint addsitions
+    bps_fail = {
+        { ['\t'] = dbg_header }, -- \t is a special value for start
+        { ['b'] = 'command expects argument, but none received' },
+        { ['b 11'] = dbg_failed_bp },
+        { ['b debug-target.lua'] = dbg_failed_bp },
+        { ['b debug-target.lua:'] = dbg_failed_bp },
+        { ['b debug-target.lua:-10'] = dbg_failed_bp },
+    },
+
+    -- partial sequence with breakpoints additions and removals
+    bpd_ok = {
+        { ['\t'] = dbg_header }, -- \t is a special value for start
+        { ['b +7'] = 'debug-target.lua:7' },
+        { ['bl'] = 'debug-target.lua:7' },
+        { ['b :5'] = 'debug-target.lua:5' },
+        { ['bl'] = 'debug-target.lua:5' },
+        { ['bd :5'] = 'debug-target.lua:5' },
+        { ['bl'] = 'debug-target.lua:7' },
+        { ['bd +7'] = 'debug-target.lua:7' },
+        { ['b :6'] = 'debug-target.lua:6' },
+        { ['bl'] = 'debug-target.lua:6' },
+        { ['bd *'] = 'Removed all breakpoints' },
+        { ['bl'] = 'No active breakpoints defined' },
+    },
+    -- partial sequence with failed breakpoints removals
+    bpd_fail = {
+        { ['\t'] = dbg_header }, -- \t is a special value for start
+        { ['bd'] = 'command expects argument, but none received' },
+        { ['bd 11'] = dbg_failed_bpd },
+        { ['bd debug-target.lua'] = dbg_failed_bpd },
+        { ['bd debug-target.lua:'] = dbg_failed_bpd },
+        { ['bd debug-target.lua:-10'] = dbg_failed_bpd },
+    },
 }
 
-g.test_interactive_debugger_session = function()
+local function debug_session(sequence)
     local cmd = { TARANTOOL_PATH, debug_target_script }
     --[[
         repeat multiple times to check all command aliases
@@ -135,4 +196,11 @@ g.test_interactive_debugger_session = function()
         end
         fh:close()
     end
+end
+
+g.test_interactive_debugger_session = function(cg)
+    local scenario_name = cg.params.sequence
+    assert(scenario_name)
+    assert(sequences[scenario_name])
+    debug_session(sequences[scenario_name])
 end
