@@ -22,11 +22,11 @@ local function tarantool_path(arg)
     return arg[index + 1]
 end
 
-local TARANTOOL_PATH = tarantool_path(arg)
+local TDBG_PATH = normalize_path(tarantool_path(arg)) .. 'tdbg'
 local path_to_script = normalize_path(debug.getinfo(1, 'S').source)
 local debug_target_script = path_to_script .. 'debug-target.lua'
 
-local DEBUGGER = 'luadebug.lua'
+local DEBUGGER = 'tdbg'
 local dbg_header = DEBUGGER .. ": Loaded for " .. tnt.version
 local dbg_prompt = DEBUGGER .. '>'
 
@@ -80,9 +80,9 @@ local sequence = {
     { ['p ymd'] = 'ymd => false' },
     { ['w'] = 'local hms = false' },
     { ['h'] = dbg_prompt },
-    { ['t'] = 'debug-target.lua:5 in chunk at' },
+    { ['t'] = 'debug-target.lua:3 in chunk at' },
     { ['u'] = 'Already at the top of the stack.' },
-    { ['d'] = 'debug-target.lua:5 in chunk at' },
+    { ['d'] = 'debug-target.lua:3 in chunk at' },
     { ['u'] = 'Inspecting frame: builtin/datetime.lua' },
     { ['l'] = 'obj => {"tzoffset" = "+0300", "hour" = 3}' },
     { ['f'] = dbg_prompt },
@@ -97,7 +97,7 @@ local sequence = {
 }
 
 g.test_interactive_debugger_session = function()
-    local cmd = { TARANTOOL_PATH, debug_target_script }
+    local cmd = { TDBG_PATH, debug_target_script }
     --[[
         repeat multiple times to check all command aliases
     ]]

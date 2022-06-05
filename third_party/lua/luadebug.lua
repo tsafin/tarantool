@@ -780,6 +780,15 @@ function dbg.call(f, ...)
     end, ...)
 end
 
+function dbg.dofile(title, arg, ...)
+    DEBUGGER = title
+    stack_inspect_offset = 0
+    stack_top = 0
+    local hook_step = hook_factory(math.huge)
+    debug.sethook(hook_step(arg), "l")
+    dofile(arg, ...);
+end
+
 -- Error message handler that can be used with lua_pcall().
 function dbg.msgh(...)
     if debug.getinfo(2) then

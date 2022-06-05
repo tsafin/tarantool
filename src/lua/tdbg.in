@@ -1,0 +1,23 @@
+#!/usr/bin/perl -e$_=$ARGV[0];exec(s|[^/]+$|@CMAKE_PROJECT_NAME@|r,@ARGV)
+
+local debugger = require 'luadebug'
+local fio = require 'fio'
+
+local RED = string.char(27) .. "[91m"
+local RESET = string.char(27) .. "[0m"
+
+debugger.writeln("Tarantool Debugger wrapper:")
+
+if #arg > 0 and fio.stat(arg[1]) ~= nil then
+    debugger.dofile('tdbg', unpack(arg))
+else
+    debugger.writeln(
+[[
+
+%sError! No accessible script provided.%s
+
+Usage: tdbg scriptpath.lua args ...
+
+]], RED, RESET)
+end
+os.exit(0)

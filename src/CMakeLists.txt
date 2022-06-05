@@ -101,6 +101,25 @@ add_custom_target(generate_lua_sources
     DEPENDS ${lua_sources})
 set_property(DIRECTORY PROPERTY ADDITIONAL_MAKE_CLEAN_FILES ${lua_sources})
 
+# debugger launcher
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/lua/tdbg.in
+    ${CMAKE_CURRENT_BINARY_DIR}/tdbg
+    @ONLY
+)
+
+add_custom_target(tdbg
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/tdbg
+)
+
+install (FILES ${CMAKE_CURRENT_BINARY_DIR}/tdbg
+    DESTINATION ${CMAKE_INSTALL_BINDIR}
+    PERMISSIONS
+        OWNER_READ OWNER_WRITE OWNER_EXECUTE
+        GROUP_READ GROUP_EXECUTE
+        WORLD_READ WORLD_EXECUTE
+)
+
 # There is no libdl.so on FreeBSD prior to 11.2.
 #
 # Always links pthread and dl dynamically.
