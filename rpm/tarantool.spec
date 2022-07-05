@@ -291,6 +291,7 @@ fi
 %{_includedir}/tarantool/module.h
 %{_includedir}/tarantool/curl
 %{_bindir}/tdbg
+%{_bindir}/vscode-tdbg
 
 %changelog
 * Thu Aug 19 2021 Kirill Yukhin <kyukhin@tarantool.org> 2.8.2.0-1
