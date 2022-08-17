@@ -26,6 +26,7 @@
 
 local dbg
 
+local DEBUGGER = 'luadebug.lua'
 -- Use ANSI color codes in the prompt by default.
 local COLOR_GRAY = ""
 local COLOR_RED = ""
@@ -102,15 +103,37 @@ local function dbg_writeln(str, ...)
     end
 end
 
-local function format_loc(file, line) return COLOR_BLUE .. file .. COLOR_RESET .. ":" .. COLOR_YELLOW ..
-    line .. COLOR_RESET end
+-- colored text output wrappers
+local function color_blue(text)
+    return COLOR_BLUE .. text .. COLOR_RESET
+end
+
+local function color_yellow(text)
+    return COLOR_YELLOW .. text .. COLOR_RESET
+end
+
+local function color_red(text)
+    return COLOR_RED .. text .. COLOR_RESET
+end
+
+local function color_grey(text)
+    return COLOR_GRAY .. text .. COLOR_RESET
+end
+
+local function q(text)
+    return "'" .. text .. "'"
+end
+
+local function format_loc(file, line)
+    return color_blue(file) .. ":" .. color_yellow(line)
+end
 
 local function format_stack_frame_info(info)
     local filename = info.source:match("@(.*)")
     local source = filename and dbg.shorten_path(filename) or info.short_src
     local namewhat = (info.namewhat == "" and "chunk at" or info.namewhat)
-    local name = (info.name and "'" .. COLOR_BLUE .. info.name .. COLOR_RESET .. "'" or
-        format_loc(source, info.linedefined))
+    local name = info.name and q(color_blue(info.name)) or
+                 format_loc(source, info.linedefined)
     return format_loc(source, info.currentline) .. " in " .. namewhat .. " " .. name
 end
 
@@ -200,9 +223,10 @@ local function mutate_bindings(_, name, value)
         repeat
             local var = debug.getlocal(level, i)
             if name == var then
-                dbg_writeln(COLOR_YELLOW ..
-                    "luadebug.lua" .. GREEN_CARET .. "Set local variable " .. COLOR_BLUE .. name .. COLOR_RESET)
-                return debug.setlocal(level + LUA_JIT_SETLOCAL_WORKAROUND, i, value)
+                dbg_writeln(color_yellow(DEBUGGER) .. GREEN_CARET ..
+                            "Set local variable " .. color_blue(name))
+                return debug.setlocal(level + LUA_JIT_SETLOCAL_WORKAROUND, i,
+                                      value)
             end
             i = i + 1
         until var == nil
@@ -214,8 +238,8 @@ local function mutate_bindings(_, name, value)
         repeat
             local var = debug.getupvalue(func, i)
             if name == var then
-                dbg_writeln(COLOR_YELLOW .. "luadebug.lua" .. GREEN_CARET ..
-                    "Set upvalue " .. COLOR_BLUE .. name .. COLOR_RESET)
+                dbg_writeln(color_yellow(DEBUGGER) ..
+                            "Set upvalue " .. color_blue(name))
                 return debug.setupvalue(func, i, value)
             end
             i = i + 1
@@ -223,14 +247,14 @@ local function mutate_bindings(_, name, value)
     end
 
     -- Set a global.
-    dbg_writeln(COLOR_YELLOW .. "luadebug.lua" .. GREEN_CARET .. "Set global variable " .. COLOR_BLUE ..
-        name .. COLOR_RESET)
+    dbg_writeln(color_yellow(DEBUGGER) ..
+                "Set global variable " .. color_blue(name))
     _G[name] = value
 end
 
 -- Compile an expression with the given variable bindings.
 local function compile_chunk(block, env)
-    local source = "luadebug.lua REPL"
+    local source = DEBUGGER .. " REPL"
     local chunk
 
     if _VERSION <= "Lua 5.1" then
@@ -241,7 +265,9 @@ local function compile_chunk(block, env)
         chunk = load(block, source, "t", env)
     end
 
-    if not chunk then dbg_writeln(COLOR_RED .. "Error: Could not compile block:\n" .. COLOR_RESET .. block) end
+    if not chunk then
+        dbg_writeln(color_red("Error: Could not compile block:\n") .. block)
+    end
     return chunk
 end
 
@@ -284,10 +310,13 @@ local function where(info, context_lines)
         for i = info.currentline - context_lines, info.currentline + context_lines do
             local tab_or_caret = (i == info.currentline and GREEN_CARET or "    ")
             local line = source[i]
-            if line then dbg_writeln(COLOR_GRAY .. "% 4d" .. tab_or_caret .. "%s", i, line) end
+            if line then
+                dbg_writeln(color_grey("% 4d") .. tab_or_caret .. "%s", i, line)
+            end
         end
     else
-        dbg_writeln(COLOR_RED .. "Error: Source not available for " .. COLOR_BLUE .. info.short_src);
+        dbg_writeln(color_red("Error: Source not available for ") ..
+                    color_blue(q(info.source)))
     end
 
     return false
@@ -323,7 +352,7 @@ local function cmd_print(expr)
 
     -- The first result is the pcall error.
     if not results[1] then
-        dbg_writeln(COLOR_RED .. "Error:" .. COLOR_RESET .. " " .. results[2])
+        dbg_writeln(color_red("Error:") .. " " .. results[2])
     else
         local output = ""
         for i = 2, results.n do
@@ -331,7 +360,7 @@ local function cmd_print(expr)
         end
 
         if output == "" then output = "<no result>" end
-        dbg_writeln(COLOR_BLUE .. expr .. GREEN_CARET .. output)
+        dbg_writeln(color_blue(expr) .. GREEN_CARET .. output)
     end
 
     return false
@@ -350,7 +379,7 @@ local function cmd_eval(code)
     -- Call the chunk and collect the results.
     local success, err = pcall(chunk, unpack(rawget(env, "...") or {}))
     if not success then
-        dbg_writeln(COLOR_RED .. "Error:" .. COLOR_RESET .. " " .. tostring(err))
+        dbg_writeln(color_red("Error:") .. " " .. tostring(err))
     end
 
     return false
@@ -417,7 +446,8 @@ local function cmd_trace()
 
         local is_current_frame = (i + stack_top == stack_inspect_offset)
         local tab_or_caret = (is_current_frame and GREEN_CARET or "    ")
-        dbg_writeln(COLOR_GRAY .. "% 4d" .. COLOR_RESET .. tab_or_caret .. "%s", i, format_stack_frame_info(info))
+        dbg_writeln(color_grey("% 4d") .. tab_or_caret .. "%s",
+                    i, format_stack_frame_info(info))
         i = i + 1
     end
 
@@ -437,7 +467,7 @@ local function cmd_locals()
 
         -- Skip the debugger object itself, "(*internal)" values, and Lua 5.2's _ENV object.
         if not rawequal(v, dbg) and k ~= "_ENV" and not k:match("%(.*%)") then
-            dbg_writeln("  " .. COLOR_BLUE .. k .. GREEN_CARET .. pretty(v))
+            dbg_writeln("  " .. color_blue(k) .. pretty(v))
         end
     end
 
@@ -521,9 +551,9 @@ local function run_command(line)
     elseif dbg.auto_eval then
         return unpack({ cmd_eval(line) })
     else
-        dbg_writeln(COLOR_RED ..
-            "Error:" .. COLOR_RESET .. " command '%s' not recognized.\nType 'h' and press return for a command list.",
-            line)
+        dbg_writeln(color_red("Error:") ..
+            " command '%s' not recognized.\n" ..
+            "Type 'h' and press return for a command list.", line)
         return false
     end
 end
@@ -535,7 +565,8 @@ repl = function(reason)
     end
 
     local info = debug.getinfo(stack_inspect_offset + CMD_STACK_LEVEL - 3)
-    reason = reason and (COLOR_YELLOW .. "break via " .. COLOR_RED .. reason .. GREEN_CARET) or ""
+    reason = reason and (color_yellow("break via ") .. color_red(reason) ..
+             GREEN_CARET) or ""
     dbg_writeln(reason .. format_stack_frame_info(info))
 
     if tonumber(dbg.auto_where) then where(info, dbg.auto_where) end
@@ -544,11 +575,13 @@ repl = function(reason)
         if auto_listing then
             pcall(cmd_listing(3))
         end
-        local success, done, hook = pcall(run_command, dbg.read(COLOR_RED .. "luadebug.lua> " .. COLOR_RESET))
+        local success, done, hook = pcall(run_command,
+                                         dbg.read(color_red(DEBUGGER .. "> ")))
         if success then
-            debug.sethook(hook and hook(0), "crl")
+            debug.sethook(hook and hook(0), "l")
         else
-            local message = COLOR_RED .. "INTERNAL DEBUGGER.LUA ERROR. ABORTING\n:" .. COLOR_RESET .. " " .. done
+            local message = color_red("INTERNAL " .. DEBUGGER .. " ERROR. " ..
+                            "ABORTING\n:") .. " " .. done
             dbg_writeln(message)
             error(message)
         end
@@ -556,11 +589,28 @@ repl = function(reason)
 end
 
 -- Make the debugger object callable like a function.
-dbg = setmetatable({}, {
-    __call = function(_, condition, top_offset, source)
-        if condition then return end
+dbg = setmetatable({
+        read    = dbg_read,
+        write   = dbg_write,
+        writeln = dbg_writeln,
 
-        top_offset = (top_offset or 0)
+        shorten_path = function(path) return path end,
+        exit    = function(err) os.exit(err) end,
+
+        auto_where  = false,
+        auto_eval   = false,
+        pretty_depth = 3,
+        pretty  = pretty,
+        pp = function(value, depth)
+            dbg_writeln(pretty(value, depth))
+        end,
+    }, {
+    __call = function(_, condition, top_offset, source)
+        if condition then
+            return
+        end
+
+        top_offset = top_offset or 0
         stack_inspect_offset = top_offset
         stack_top = top_offset
 
@@ -569,27 +619,12 @@ dbg = setmetatable({}, {
     end,
 })
 
--- Expose the debugger's IO functions.
-dbg.read = dbg_read
-dbg.write = dbg_write
-dbg.shorten_path = function(path) return path end
-dbg.exit = function(err) os.exit(err) end
-
-dbg.writeln = dbg_writeln
-
-dbg.pretty_depth = 3
-dbg.pretty = pretty
-dbg.pp = function(value, depth) dbg_writeln(pretty(value, depth)) end
-
-dbg.auto_where = false
-dbg.auto_eval = false
-
 local lua_error, lua_assert = error, assert
 
 -- Works like error(), but invokes the debugger.
 function dbg.error(err, level)
     level = level or 1
-    dbg_writeln(COLOR_RED .. "ERROR: " .. COLOR_RESET .. pretty(err))
+    dbg_writeln(color_red("ERROR: ") .. pretty(err))
     dbg(false, level, "dbg.error()")
 
     lua_error(err, level)
@@ -598,7 +633,7 @@ end
 -- Works like assert(), but invokes the debugger on a failure.
 function dbg.assert(condition, message)
     if not condition then
-        dbg_writeln(COLOR_RED .. "ERROR:" .. COLOR_RESET .. message)
+        dbg_writeln(color_red("ERROR:") .. message)
         dbg(false, 1, "dbg.assert()")
     end
 
@@ -608,7 +643,7 @@ end
 -- Works like pcall(), but invokes the debugger on an error.
 function dbg.call(f, ...)
     return xpcall(f, function(err)
-        dbg_writeln(COLOR_RED .. "ERROR: " .. COLOR_RESET .. pretty(err))
+        dbg_writeln(color_red("ERROR: ") .. pretty(err))
         dbg(false, 1, "dbg.call()")
 
         return err
@@ -618,12 +653,12 @@ end
 -- Error message handler that can be used with lua_pcall().
 function dbg.msgh(...)
     if debug.getinfo(2) then
-        dbg_writeln(COLOR_RED .. "ERROR: " .. COLOR_RESET .. pretty(...))
+        dbg_writeln(color_red("ERROR: ") .. pretty(...))
         dbg(false, 1, "dbg.msgh()")
     else
-        dbg_writeln(COLOR_RED ..
-            "luadebug.lua: " ..
-            COLOR_RESET .. "Error did not occur in Lua code. Execution will continue after dbg_pcall().")
+        dbg_writeln(color_red(DEBUGGER .. ": ") ..
+                    "Error did not occur in Lua code. " ..
+                    "Execution will continue after dbg_pcall().")
     end
 
     return ...
@@ -647,7 +682,6 @@ end
 
 -- Detect Lua/LuaJIT version.
 LUA_JIT_SETLOCAL_WORKAROUND = -1
-dbg_writeln(COLOR_YELLOW .. "luadebug.lua: " .. COLOR_RESET .. "Loaded for " ..
-            jit.version)
+dbg_writeln(color_yellow(DEBUGGER .. ": ") .. "Loaded for " .. jit.version)
 
 return dbg
