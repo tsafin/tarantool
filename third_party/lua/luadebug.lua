@@ -596,7 +596,27 @@ local function run_command(line)
     end
 end
 
+local started = false
+
+local function motto()
+    -- Detect Lua/LuaJIT version.
+    LUA_JIT_SETLOCAL_WORKAROUND = -1
+    dbg_writeln(color_yellow(DEBUGGER .. ": ") .. "Loaded for "..
+                jit.version)
+    jit.off()
+end
+
+-- lazily perform repl initialization
+local function start_repl()
+    if started then
+        return
+    end
+    motto()
+    started = true
+end
+
 repl = function(reason)
+    start_repl()
     -- Skip frames without source info.
     while not frame_has_line(debug.getinfo(stack_inspect_offset + CMD_STACK_LEVEL - 3)) do
         stack_inspect_offset = stack_inspect_offset + 1
@@ -717,9 +737,5 @@ if color_maybe_supported and not os.getenv("DBG_NOCOLOR") then
     COLOR_RESET = string.char(27) .. "[0m"
     GREEN_CARET = string.char(27) .. "[92m => " .. COLOR_RESET
 end
-
--- Detect Lua/LuaJIT version.
-LUA_JIT_SETLOCAL_WORKAROUND = -1
-dbg_writeln(color_yellow(DEBUGGER .. ": ") .. "Loaded for " .. jit.version)
 
 return dbg
