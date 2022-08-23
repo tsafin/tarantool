@@ -49,6 +49,7 @@
 #include "core/backtrace.h"
 #include "core/tt_static.h"
 #include "lua/backtrace.h"
+#include "lua/tarantool_debug.h"
 #include "lua/fiber.h"
 #include "lua/fiber_cond.h"
 #include "lua/fiber_channel.h"

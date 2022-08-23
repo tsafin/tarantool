@@ -373,6 +373,15 @@ create_unit_test(PREFIX luaL_iterator
                            ${LIB_DL}
 )
 
+create_unit_test(PREFIX builtin_module_sources
+                 SOURCES builtin_module_sources.c
+                 LIBRARIES unit server
+                           ${CURL_LIBRARIES}
+                           ${LIBYAML_LIBRARIES}
+                           ${READLINE_LIBRARIES}
+                           ${LUAJIT_LIBRARIES}
+)
+
 create_unit_test(PREFIX say
                  SOURCES say.c core_test_utils.c
                  LIBRARIES core unit
