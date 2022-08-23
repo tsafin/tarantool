@@ -199,6 +199,10 @@ add_executable(luaL_iterator.test luaL_iterator.c)
 target_link_libraries(luaL_iterator.test unit server coll core misc
     ${CURL_LIBRARIES} ${LIBYAML_LIBRARIES} ${READLINE_LIBRARIES}
     ${ICU_LIBRARIES} ${LUAJIT_LIBRARIES} ${LIB_DL})
+add_executable(builtin_module_sources.test builtin_module_sources.c)
+target_link_libraries(builtin_module_sources.test unit server
+    ${CURL_LIBRARIES} ${LIBYAML_LIBRARIES} ${READLINE_LIBRARIES}
+    ${LUAJIT_LIBRARIES})
 
 add_executable(say.test say.c core_test_utils.c)
 target_link_libraries(say.test core unit)

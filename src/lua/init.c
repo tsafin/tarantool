@@ -49,6 +49,7 @@
 #include "core/backtrace.h"
 #include "core/tt_static.h"
 #include "lua/backtrace.h"
+#include "lua/tarantool_debug.h"
 #include "lua/fiber.h"
 #include "lua/fiber_cond.h"
 #include "lua/fiber_channel.h"
@@ -427,7 +428,7 @@ static const char *lua_modules_preload[] = {
  * Retrieve builtin module sources, if available.
  */
 static const char *
-tarantool_builtin_module(const char *modname)
+tarantool_debug_getsources(const char *modname)
 {
 	for (size_t i = 0; lua_modules[i] != NULL; i += 2) {
 		const char *shortname = lua_modules[i];
@@ -446,11 +447,11 @@ tarantool_builtin_module(const char *modname)
  * LuaC implementation of a function to retrieve builtin module sources.
  */
 static int
-lbox_tarantool_builtin_module(struct lua_State *L)
+lbox_tarantool_debug_getsources(struct lua_State *L)
 {
 	int index = lua_gettop(L);
 	if (index != 1) {
-		lua_pushstring(L, "tarantool_builtin_module() function expects"
+		lua_pushstring(L, "tarantool_debug_getsources() function expects"
 				" one argument");
 		lua_error(L);
 	}
@@ -458,7 +459,7 @@ lbox_tarantool_builtin_module(struct lua_State *L)
 	const char *modname = luaL_checklstring(L, index, &len);
 	if (len <= 0)
 		goto ret_nil;
-	const char *code = tarantool_builtin_module(modname);
+	const char *code = tarantool_debug_getsources(modname);
 	if (code == NULL)
 		goto ret_nil;
 	lua_pushstring(L, code);
@@ -466,6 +467,16 @@ lbox_tarantool_builtin_module(struct lua_State *L)
 ret_nil:
 	lua_pushnil(L);
 	return 1;
+}
+
+void
+tarantool_lua_debug_init(struct lua_State *L)
+{
+	static const struct luaL_Reg initlib[] = {
+		{"getsources", lbox_tarantool_debug_getsources},
+		{NULL, NULL}
+	};
+	luaL_register_module(L, "tarantool.debug", initlib);
 }
 
 /**
@@ -768,8 +779,6 @@ tarantool_lua_init(const char *tarantool_bin, int argc, char **argv)
 	luaL_loadstring(L, "return require('ffi')");
 	lua_call(L, 0, 0);
 	lua_register(L, "tonumber64", lbox_tonumber64);
-	lua_register(L, "tarantool_builtin_module",
-		     lbox_tarantool_builtin_module);
 
 	tarantool_lua_uri_init(L);
 	tarantool_lua_utf8_init(L);
@@ -853,6 +862,7 @@ tarantool_lua_init(const char *tarantool_bin, int argc, char **argv)
 
 	luaopen_tarantool(L);
 	lua_pop(L, 1);
+	tarantool_lua_debug_init(L);
 
 	lua_newtable(L);
 	lua_pushinteger(L, -1);
