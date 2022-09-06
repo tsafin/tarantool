@@ -320,6 +320,7 @@ local function compile_chunk(block, env)
 end
 
 local SOURCE_CACHE = {}
+local tnt_debug = require('tarantool').debug
 
 local function where(info, context_lines)
     local filesource = info.source
@@ -329,7 +330,7 @@ local function where(info, context_lines)
         -- Tarantool builtin module
         if filesource:match("@builtin/.*.lua") then
             pcall(function()
-                local lua_code = tarantool_builtin_module(filesource)
+                local lua_code = tnt_debug.getsources(filesource)
 
                 for line in string.gmatch(lua_code, "([^\n]*)\n?") do
                     table.insert(source, line)
