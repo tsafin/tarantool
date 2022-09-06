@@ -10,7 +10,14 @@ local function unescape(s)
     return s:gsub('[\27\155][][()#;?%d]*[A-PRZcf-ntqry=><~]', '')
 end
 
-local TARANTOOL_PATH = arg[-1]
+local function tarantool_path(arg)
+    local index = -2
+    -- arg[-1] is guaranteed to be non-null
+    while arg[index] do index = index - 1 end
+    return arg[index + 1]
+end
+
+local TARANTOOL_PATH = tarantool_path(arg)
 local path_to_script = normalize_path(debug.getinfo(1, 'S').source)
 local debug_target_script = path_to_script .. 'debug-target.lua'
 
