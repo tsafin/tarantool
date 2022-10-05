@@ -96,6 +96,7 @@ create_fuzz_test(PREFIX mp_datetime
 include(ProtobufMutator)
 
 add_subdirectory(lua_fuzzer)
+add_subdirectory(sql_fuzzer)
 
 add_custom_target(fuzzers
                   DEPENDS ${FUZZ_TEST_TARGETS}
