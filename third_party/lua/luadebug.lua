@@ -907,6 +907,24 @@ function dbg.dofile(title, file, ...)
     dofile(file, ...);
 end
 
+-- interactive console start
+function dbg.start(path, ...)
+    dbg.writeln("Tarantool Debugger wrapper:")
+
+    if path and fio.stat(path) ~= nil then
+        dbg.dofile('tdbg', path, ...)
+    else
+        dbg.writeln(
+[[
+
+%sError! No accessible script provided.%s
+
+Usage: tdbg scriptpath.lua args ...
+
+]], COLOR_RED, COLOR_RESET)
+    end
+end
+
 -- Error message handler that can be used with lua_pcall().
 function dbg.msgh(...)
     if debug.getinfo(2) then
