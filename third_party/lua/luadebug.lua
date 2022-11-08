@@ -27,7 +27,7 @@
 local dbg
 local fio = require('fio')
 
-local DEBUGGER = 'luadebug.lua'
+local DEBUGGER = 'luadebug'
 -- Use ANSI color codes in the prompt by default.
 local COLOR_GRAY = ""
 local COLOR_RED = ""
@@ -936,6 +936,19 @@ function dbg.call(f, ...)
 
         return err
     end, ...)
+end
+
+-- interactive console start
+function dbg.start(path, ...)
+    -- all checks should be done in init.c
+    assert(path)
+    assert(fio.stat(path) ~= nil)
+
+    stack_inspect_offset = 0
+    stack_top = 0
+    local hook_step = hook_factory(math.huge)
+    debug.sethook(hook_step(path), "l")
+    dofile(path, ...);
 end
 
 -- Error message handler that can be used with lua_pcall().

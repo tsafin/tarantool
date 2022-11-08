@@ -25,8 +25,8 @@ local TARANTOOL_PATH = tarantool_path(arg)
 local path_to_script = normalize_path(debug.getinfo(1, 'S').source)
 local debug_target_script = path_to_script .. 'debug-target.lua'
 
-local DEBUGGER = 'luadebug.lua'
-local dbg_header = DEBUGGER .. ": Loaded for " .. tnt.version
+local DEBUGGER = 'luadebug'
+local dbg_header = "Tarantool debugger " .. tnt.version
 local dbg_prompt = DEBUGGER .. '>'
 local dbg_failed_bp = 'command expects argument in format filename:NN or ' ..
                       'filename+NN, where NN should be a positive number.'
@@ -83,7 +83,7 @@ local sequences = {
 
     -- full, complex sequence
     full = {
-        { ['\t'] = dbg_header }, -- \t is a special value for start
+        { ['\t'] = '' }, -- \t is a special value for start
         { ['n'] = dbg_prompt },
         { ['s'] = dbg_prompt },
         { ['n'] = dbg_prompt },
@@ -95,8 +95,11 @@ local sequences = {
         { ['w'] = 'local hms = false' },
         { ['h'] = dbg_prompt },
         { ['t'] = '=> builtin/datetime.lua' },
-        { ['u'] = 'debug-target.lua:5 in chunk at' },
-        { ['u'] = 'Already at the bottom of the stack.' },
+        { ['u'] = 'debug-target.lua:3 in chunk at' },
+        -- FIXME - we should not show calling side at luadebug.lua::start
+        -- { ['u'] = 'Already at the bottom of the stack.' },
+        { ['u'] = 'Inspecting frame: builtin/luadebug.lua' },
+        { ['d'] = 'debug-target.lua:3 in chunk at' },
         { ['d'] = 'Inspecting frame: builtin/datetime.lua' },
         { ['l'] = 'obj => {"tzoffset" = "+0300", "hour" = 3}' },
         { ['f'] = dbg_prompt },
@@ -112,9 +115,9 @@ local sequences = {
 
     -- partial sequence with successful breakpoints added
     bps_ok = {
-        { ['\t'] = dbg_header }, -- \t is a special value for start
-        { ['b +11'] = dbg_prompt },
-        { ['c'] = 'debug-target.lua:11' },
+        { ['\t'] = '' }, -- \t is a special value for start
+        { ['b +9'] = dbg_prompt },
+        { ['c'] = 'debug-target.lua:9' },
         { ['n'] = dbg_prompt },
         { ['p S'] = 'S => "1970-01-01T0300+0300"' },
         { ['p T'] = 'T => 1970-01-01T03:00:00+0300' },
@@ -123,7 +126,7 @@ local sequences = {
 
     -- partial sequence with failed breakpoint addsitions
     bps_fail = {
-        { ['\t'] = dbg_header }, -- \t is a special value for start
+        { ['\t'] = '' }, -- \t is a special value for start
         { ['b'] = 'command expects argument, but none received' },
         { ['b 11'] = dbg_failed_bp },
         { ['b debug-target.lua'] = dbg_failed_bp },
@@ -133,7 +136,7 @@ local sequences = {
 
     -- partial sequence with breakpoints additions and removals
     bpd_ok = {
-        { ['\t'] = dbg_header }, -- \t is a special value for start
+        { ['\t'] = '' }, -- \t is a special value for start
         { ['b +7'] = 'debug-target.lua:7' },
         { ['bl'] = 'debug-target.lua:7' },
         { ['b :5'] = 'debug-target.lua:5' },
@@ -148,7 +151,7 @@ local sequences = {
     },
     -- partial sequence with failed breakpoints removals
     bpd_fail = {
-        { ['\t'] = dbg_header }, -- \t is a special value for start
+        { ['\t'] = '' }, -- \t is a special value for start
         { ['bd'] = 'command expects argument, but none received' },
         { ['bd 11'] = dbg_failed_bpd },
         { ['bd debug-target.lua'] = dbg_failed_bpd },
@@ -158,7 +161,7 @@ local sequences = {
 }
 
 local function debug_session(sequence)
-    local cmd = { TARANTOOL_PATH, debug_target_script }
+    local cmd = { TARANTOOL_PATH, '-d', debug_target_script }
     --[[
         repeat multiple times to check all command aliases
     ]]
@@ -169,6 +172,7 @@ local function debug_session(sequence)
             stdin = popen.opts.PIPE,
         })
         t.assert_is_not(fh, nil)
+        local first = true
         for _, row in pairs(sequence) do
             local cmd, expected = next(row)
             if cmd ~= '\t' then
@@ -186,7 +190,14 @@ local function debug_session(sequence)
             local clean_cmd = trim(cmd)
             -- there should be empty stderr - check it before stdout
             local errout = fh:read({ timeout = 0.05, stderr = true})
-            t.assert(errout == nil or trim(errout) == '')
+            if first and errout then
+                -- we do not expect anything on stderr
+                -- with exception of initial debugger header
+                t.assert_str_contains(trim(errout), dbg_header, false)
+                first = false
+            else
+                t.assert(errout == nil or trim(errout) == '')
+            end
             repeat
                 result = trim(unescape(fh:read({ timeout = 0.5 })))
             until result ~= '' and result ~= clean_cmd
