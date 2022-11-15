@@ -11,7 +11,7 @@ local function unescape(s)
 end
 
 local function trim(s)
-    return s:gsub('%s+$', '')
+    return s and s:gsub('%s+$', '') or ''
 end
 
 local function tarantool_path(arg)
@@ -32,6 +32,14 @@ local dbg_failed_bp = 'command expects argument in format filename:NN or ' ..
                       'filename+NN, where NN should be a positive number.'
 local dbg_failed_bpd = 'command expects argument specifying breakpoint or' ..
                       ' * for all breakpoints.'
+local verbose = os.getenv("DEBUG") or false
+
+local function debuglog(...)
+    if not verbose then
+        return
+    end
+    print(...)
+end
 
 local cmd_aliases = {
     ['c'] = 'c|cont|continue',
@@ -184,12 +192,14 @@ local function debug_session(sequence)
                     cmd = cmd .. '\n'
                 end
                 fh:write(cmd)
+                debuglog('cmd: "'..trim(cmd)..'"')
             end
 
             local result
             local clean_cmd = trim(cmd)
             -- there should be empty stderr - check it before stdout
             local errout = fh:read({ timeout = 0.05, stderr = true})
+            debuglog('errout:', trim(errout))
             if first and errout then
                 -- we do not expect anything on stderr
                 -- with exception of initial debugger header
@@ -200,6 +210,7 @@ local function debug_session(sequence)
             end
             repeat
                 result = trim(unescape(fh:read({ timeout = 0.5 })))
+                debuglog('result:', result)
             until result ~= '' and result ~= clean_cmd
             if expected ~= '' then
                 t.assert_str_contains(result, expected, false)
