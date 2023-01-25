@@ -38,7 +38,6 @@ local COLOR_RESET = ""
 local CARET_SYM = "=>"
 local CARET = " " .. CARET_SYM .. " "
 local BREAK_SYM = "●"
-local auto_listing = true
 
 local LJ_MAX_LINE = 0x7fffff00 -- Max. source code line number.
 
@@ -416,6 +415,18 @@ local function where(info, context_lines)
     return false
 end
 
+-- Status flag to avoid redundant code listing to be shown.
+-- `up`, `down`, `where` commands show their own code context
+-- so do not show anything after them.
+local listing_shown = false
+
+-- Display automatically `where` context if configured so.
+local function auto_listing(info)
+    if tonumber(dbg.cfg.auto_where) then
+        where(info, dbg.cfg.auto_where)
+    end
+end
+
 -- Wee version differences
 local unpack = unpack or table.unpack
 local pack = function(...) return { n = select("#", ...), ... } end
@@ -634,12 +645,11 @@ local function cmd_up()
     if info then
         stack_inspect_offset = offset
         dbg_writeln("Inspecting frame: " .. format_stack_frame_info(info))
-        if tonumber(dbg.cfg.auto_where) then
-            where(info, dbg.cfg.auto_where)
-        end
+        auto_listing(info)
     else
         dbg_write_warn("Already at the bottom of the stack.")
     end
+    listing_shown = true
 
     return false
 end
@@ -660,25 +670,20 @@ local function cmd_down()
     if info then
         stack_inspect_offset = offset
         dbg_writeln("Inspecting frame: " .. format_stack_frame_info(info))
-        if tonumber(dbg.cfg.auto_where) then
-            where(info, dbg.cfg.auto_where)
-        end
+        auto_listing(info)
     else
         dbg_write_warn("Already at the top of the stack.")
     end
+    listing_shown = true
 
     return false
 end
 
 local function cmd_where(context_lines)
     local info = debug.getinfo(stack_inspect_offset + CMD_STACK_LEVEL, "Sl")
-    return (info and where(info, tonumber(context_lines) or 5))
-end
-
-local function cmd_listing(context_lines)
-    local offset = stack_inspect_offset + CMD_STACK_LEVEL - 2
-    local info = debug.getinfo(offset, "Sl")
-    return (info and where(info, tonumber(context_lines) or 5))
+    local ret = (info and where(info, tonumber(context_lines) or 5))
+    listing_shown = true
+    return ret
 end
 
 local function cmd_trace()
@@ -902,14 +907,14 @@ repl = function(reason)
              CARET) or ""
     dbg_writeln(reason .. format_stack_frame_info(info))
 
-    if tonumber(dbg.cfg.auto_where) then
-        where(info, dbg.cfg.auto_where)
-    end
-
     repeat
-        if auto_listing then
-            pcall(cmd_listing(3))
+        -- Do not current context if prior command showed their own.
+        if not listing_shown then
+            auto_listing(info)
         end
+        -- Command could show their own context with listing
+        -- so reset status before command executed.
+        listing_shown = false
         local success, done, hook = pcall(run_command,
                                          dbg.read(color_red(DEBUGGER .. "> ")))
         if success then
@@ -933,7 +938,7 @@ dbg = setmetatable({
         exit    = function(err) os.exit(err) end,
 
         cfg = {
-            auto_where  = false,
+            auto_where  = 3,
             auto_eval   = false,
             pretty_depth = 3,
         },
