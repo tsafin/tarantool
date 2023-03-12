@@ -93,14 +93,9 @@ create_fuzz_test(PREFIX mp_datetime
                  LIBRARIES core fuzzer_config
 )
 
-# External dependencies
 include(ProtobufMutator)
 
-if(ENABLE_ASAN)
-    add_subdirectory(lua_fuzzer)
-else()
-    message(WARNING "LPM-based fuzzers are disabled without ASAN")
-endif()
+add_subdirectory(lua_fuzzer)
 
 add_custom_target(fuzzers
                   DEPENDS ${FUZZ_TEST_TARGETS}
