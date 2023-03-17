@@ -25,16 +25,8 @@ target_link_libraries(lua_fuzzer
                       fuzzer_config)
 
 add_dependencies(lua_fuzzer
-                 ${LUAJIT_LIBRARIES}
+                 libluajit_static
                  ${LPM_LIBRARIES}
                  lua_grammar-proto)
 
-# Build script in OSS Fuzz suppose that all fuzzers are placed to a single
-# directory.
-set_target_properties(lua_fuzzer
-    PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/test/fuzz/"
-    OUTPUT_NAME "luaL_loadbuffer"
-)
-
-set(FUZZ_TEST_TARGETS ${FUZZ_TEST_TARGETS} luaL_loadbuffer PARENT_SCOPE)
+set(FUZZ_TEST_TARGETS "${FUZZ_TEST_TARGETS};lua_fuzzer" PARENT_SCOPE)
