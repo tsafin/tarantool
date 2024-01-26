@@ -495,12 +495,17 @@ int sqlVdbeExec(Vdbe *p)
 #define EXECUTE(opname) Exec_##opname
 #define NEXT(opcode)    goto *dispatch_table[opcode]
 #define SWITCH(opcode)  goto *dispatch_table[opcode];
+#define JUMP_P2()	do { \
+				pOp = &aOp[pOp->p2 - 1]; \
+				DISPATCH(); \
+			} while (0)
 
 #else
 
 #define EXECUTE(opname) case opname
 #define NEXT(opcode)    goto start_eval
 #define SWITCH(opcode)  start_eval: switch (opcode)
+#define JUMP_P2()	JUMP_P2();
 
 #endif /* defined(SQL_USE_GOTO) */
 
@@ -606,7 +611,7 @@ int sqlVdbeExec(Vdbe *p)
  * to the current line should be indented for EXPLAIN output.
  */
 EXECUTE(OP_Goto): {             /* jump */
-	goto jump_to_p2;
+	JUMP_P2();
 }
 
 /* Opcode: SetDiag P1 P2 * P4 *
@@ -623,7 +628,7 @@ EXECUTE(OP_Goto): {             /* jump */
 EXECUTE(OP_SetDiag): {             /* jump */
 	box_error_set(__FILE__, __LINE__, pOp->p1, pOp->p4.z);
 	if (pOp->p2 != 0)
-		goto jump_to_p2;
+		JUMP_P2();
 	DISPATCH();
 }
 
@@ -641,9 +646,12 @@ EXECUTE(OP_Gosub): {            /* jump */
 	REGISTER_TRACE(p, pOp->p1, pIn1);
 
 	/* Most jump operations do a goto to this spot in order to update
-	 * the pOp pointer.
+	 * the pOp pointer. 
+	 * (Used only not when computed goto used for dispatch!)
 	 */
-			jump_to_p2:
+#ifndef SQL_USE_GOTO
+jump_to_p2:
+#endif
 	pOp = &aOp[pOp->p2 - 1];
 	DISPATCH();
 }
@@ -679,7 +687,8 @@ EXECUTE(OP_InitCoroutine): {     /* jump */
 	pOut = &aMem[pOp->p1];
 	assert(!VdbeMemDynamic(pOut));
 	mem_set_uint(pOut, pOp->p3 - 1);
-	if (pOp->p2) goto jump_to_p2;
+	if (pOp->p2)
+		JUMP_P2();
 	DISPATCH();
 }
 
@@ -1417,7 +1426,7 @@ EXECUTE(OP_MustBeInt): {            /* jump, in1 */
 	pIn1 = &aMem[pOp->p1];
 	if (mem_to_int_precise(pIn1) != 0) {
 		if (pOp->p2 != 0)
-			goto jump_to_p2;
+			JUMP_P2();
 		diag_set(ClientError, ER_SQL_TYPE_MISMATCH,
 			 mem_str(pIn1), "integer");
 		goto abort_due_to_error;
@@ -1554,7 +1563,7 @@ EXECUTE(OP_Ne): {             /* same as TK_NE, jump, in1, in3 */
 			DISPATCH();
 		}
 		if ((pOp->p5 & SQL_JUMPIFNULL) != 0)
-			goto jump_to_p2;
+			JUMP_P2();
 		DISPATCH();
 	}
 	int cmp_res;
@@ -1569,7 +1578,7 @@ EXECUTE(OP_Ne): {             /* same as TK_NE, jump, in1, in3 */
 		DISPATCH();
 	}
 	if (result)
-		goto jump_to_p2;
+		JUMP_P2();
 	DISPATCH();
 }
 
@@ -1614,7 +1623,7 @@ EXECUTE(OP_Ge): {             /* same as TK_GE, jump, in1, in3 */
 			DISPATCH();
 		}
 		if ((pOp->p5 & SQL_JUMPIFNULL) != 0)
-			goto jump_to_p2;
+			JUMP_P2();
 		DISPATCH();
 	}
 	int cmp_res;
@@ -1647,7 +1656,7 @@ EXECUTE(OP_Ge): {             /* same as TK_GE, jump, in1, in3 */
 		DISPATCH();
 	}
 	if (result)
-		goto jump_to_p2;
+		JUMP_P2();
 	DISPATCH();
 }
 
@@ -1663,7 +1672,8 @@ EXECUTE(OP_ElseNotEq): {       /* same as TK_ESCAPE, jump */
 	assert(pOp>aOp);
 	assert(pOp[-1].opcode==OP_Lt || pOp[-1].opcode==OP_Gt);
 	assert(pOp[-1].p5 & SQL_STOREP2);
-	if (iCompare!=0) goto jump_to_p2;
+	if (iCompare!=0)
+		JUMP_P2();
 	DISPATCH();
 }
 
@@ -1890,7 +1900,7 @@ EXECUTE(OP_BitNot): {             /* same as TK_BITNOT, in1, out2 */
 EXECUTE(OP_Once): {             /* jump */
 	assert(p->aOp[0].opcode==OP_Init);
 	if (p->aOp[0].p1==pOp->p1) {
-		goto jump_to_p2;
+		JUMP_P2();
 	} else {
 		pOp->p1 = p->aOp[0].p1;
 	}
@@ -1921,7 +1931,7 @@ EXECUTE(OP_IfNot): {            /* jump, in1 */
 		goto abort_due_to_error;
 	}
 	if (c) {
-		goto jump_to_p2;
+		JUMP_P2();
 	}
 	DISPATCH();
 }
@@ -1934,7 +1944,7 @@ EXECUTE(OP_IfNot): {            /* jump, in1 */
 EXECUTE(OP_IsNull): {            /* same as TK_ISNULL, jump, in1 */
 	pIn1 = &aMem[pOp->p1];
 	if (mem_is_null(pIn1)) {
-		goto jump_to_p2;
+		JUMP_P2();
 	}
 	DISPATCH();
 }
@@ -1947,7 +1957,7 @@ EXECUTE(OP_IsNull): {            /* same as TK_ISNULL, jump, in1 */
 EXECUTE(OP_NotNull): {            /* same as TK_NOTNULL, jump, in1 */
 	pIn1 = &aMem[pOp->p1];
 	if (!mem_is_null(pIn1)) {
-		goto jump_to_p2;
+		JUMP_P2();
 	}
 	DISPATCH();
 }
@@ -2638,7 +2648,7 @@ EXECUTE(OP_SequenceTest): {
 	pC = p->apCsr[pOp->p1];
 	assert(isSorter(pC));
 	if ((pC->seqCount++)==0) {
-		goto jump_to_p2;
+		JUMP_P2();
 	}
 	DISPATCH();
 }
@@ -2761,7 +2771,7 @@ EXECUTE(OP_SeekGT): {       /* jump, in3 */
 #endif
 	assert(pOp->p2 > 0);
 	if (res != 0)
-		goto jump_to_p2;
+		JUMP_P2();
 	DISPATCH();
 }
 
@@ -2858,7 +2868,7 @@ EXECUTE(OP_SeekGE): {       /* jump, in3 */
 	}
 	if (is_zero) {
 		assert(pOp->p2 > 0);
-		goto jump_to_p2;
+		JUMP_P2();
 	}
 	if (!is_eq && is_op_change)
 		cur->uc.pCursor->iter_type = is_le ? ITER_LT : ITER_GT;
@@ -2873,7 +2883,7 @@ EXECUTE(OP_SeekGE): {       /* jump, in3 */
 #endif
 	assert(pOp->p2 > 0);
 	if (res != 0)
-		goto jump_to_p2;
+		JUMP_P2();
 	/* Skip the OP_IdxLT/OP_IdxGT that follows if we have EQ. */
 	if (is_eq)
 		pOp++;
@@ -3013,10 +3023,10 @@ EXECUTE(OP_Found): {        /* jump, in3 */
 	pC->cacheStatus = CACHE_STALE;
 	if (pOp->opcode == OP_Found) {
 		if (alreadyExists)
-			goto jump_to_p2;
+			JUMP_P2();
 	} else {
 		if (takeJump || !alreadyExists)
-			goto jump_to_p2;
+			JUMP_P2();
 	}
 	DISPATCH();
 }
@@ -3232,7 +3242,7 @@ EXECUTE(OP_SorterCompare): {
 			nKeyCol = pOp->p4.i;
 			if (sqlVdbeSorterCompare(pC, pIn3, nKeyCol, &res) != 0)
 				goto abort_due_to_error;
-			if (res) goto jump_to_p2;
+			if (res) JUMP_P2();
 			DISPATCH();
 		};
 
@@ -3391,7 +3401,7 @@ EXECUTE(OP_Last): {        /* jump */
 		pC->nullRow = (u8)res;
 		pC->cacheStatus = CACHE_STALE;
 		if (pOp->p2 > 0 && res != 0)
-			goto jump_to_p2;
+			JUMP_P2();
 	} else {
 		assert(pOp->p2==0);
 	}
@@ -3469,7 +3479,7 @@ EXECUTE(OP_Rewind): {        /* jump */
 	}
 	pC->nullRow = (u8)res;
 	assert(pOp->p2>0 && pOp->p2<p->nOp);
-	if (res) goto jump_to_p2;
+	if (res) JUMP_P2();
 	DISPATCH();
 }
 
@@ -3589,7 +3599,7 @@ EXECUTE(OP_Next):          /* jump */
 #ifdef SQL_TEST
 		sql_search_count++;
 #endif
-		goto jump_to_p2;
+		JUMP_P2();
 	} else {
 		pC->nullRow = 1;
 	}
@@ -3960,7 +3970,7 @@ EXECUTE(OP_IdxGE): {       /* jump */
 		res++;
 	}
 	if (res > 0)
-		goto jump_to_p2;
+		JUMP_P2();
 	DISPATCH();
 }
 
@@ -4258,7 +4268,7 @@ NEXECUTE (OP_FkCounter): {
  */
 NEXECUTE (OP_FkIfZero): {         /* jump */
 	if (p->nFkConstraint == 0)
-		goto jump_to_p2;
+		JUMP_P2();
 	DISPATCH();
 }
 #endif
@@ -4286,7 +4296,7 @@ EXECUTE(OP_IfPos): {        /* jump, in1 */
 		 */
 		res &= -(res <= pIn1->u.u);
 		pIn1->u.u = res;
-		goto jump_to_p2;
+		JUMP_P2();
 	}
 	DISPATCH();
 }
@@ -4337,7 +4347,7 @@ EXECUTE(OP_IfNotZero): {        /* jump, in1 */
 	assert(mem_is_uint(pIn1));
 	if (pIn1->u.u > 0) {
 		pIn1->u.u--;
-		goto jump_to_p2;
+		JUMP_P2();
 	}
 	DISPATCH();
 }
@@ -4353,7 +4363,7 @@ EXECUTE(OP_DecrJumpZero): {      /* jump, in1 */
 	assert(mem_is_uint(pIn1));
 	if (pIn1->u.u > 0)
 		pIn1->u.u--;
-	if (pIn1->u.u == 0) goto jump_to_p2;
+	if (pIn1->u.u == 0) JUMP_P2();
 	DISPATCH();
 }
 
@@ -4502,7 +4512,7 @@ EXECUTE(OP_Init): {          /* jump */
 		pOp->p1 = 0;
 	}
 	pOp->p1++;
-	goto jump_to_p2;
+	JUMP_P2();
 }
 
 /* Opcode: GenSpaceid P1 * * * *
